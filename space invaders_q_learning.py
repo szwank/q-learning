@@ -266,9 +266,11 @@ class QLearner:
             epochs=1, batch_size=len(start_states), verbose=0
         )
 
-    
+    def save_model(self):
+        self.model.save('model')
 
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000)
 
-learner.train(1)
+learner.train(100)
+
