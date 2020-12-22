@@ -1,3 +1,4 @@
+from time import sleep
 from typing import List
 
 import gym
@@ -103,21 +104,22 @@ class ExperienceReplay:
         terminate_state = []
         # remove -2 because -1 is from counting from 0 and -1 is from counting most
         # current frame as first one and foutrue frame as +1 frame
-        for i in np.random.randint(self.n_state_frames, len(self.states) - 2, n):
+        for i in np.random.randint(0, len(self) - 1, n):
             state, action, reward, next_state, terminate = self.get_sample(i)
             states.append(state)
             actions.append(action)
             next_states.append(next_state)
             rewards.append(reward)
             terminate_state.append(terminate)
+
         return np.swapaxes(np.array(states), 1, 3), np.array(actions), np.array(rewards), \
                np.swapaxes(np.array(next_states), 1, 3), np.array(terminate_state)
 
     def get_sample(self, idx):
-        state = self.states[idx - self.n_state_frames:idx]
+        state = self.states[idx:idx + self.n_state_frames]
         action = self.actions[idx]
         reward = self.rewards[idx]
-        next_state = self.states[idx - self.n_state_frames+1:idx+1]
+        next_state = self.states[idx + 1:idx + self.n_state_frames + 1]
         terminate = self.teminate_state[idx]
 
         return np.array(state), action, reward, next_state, terminate
@@ -233,7 +235,7 @@ class QLearner:
         return max(0.1, 1 - (self.iteration - 1) * 1 / 1000000)
 
     def choose_best_action(self):
-        prediction = self.model.predict(np.array(self.state.to_list()), np.ones((self.n_actions, )))
+        prediction = self.model.predict(np.array(self.state.to_list()), np.ones((1, self.n_actions)))
         print(f'prediction: {prediction}')
         return np.argmax(prediction)
 
@@ -256,6 +258,7 @@ class QLearner:
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         next_Q_values = self.model.predict([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is 0 by definition, so override them
+        print(is_terminal)
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
         Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
@@ -269,8 +272,23 @@ class QLearner:
     def save_model(self):
         self.model.save('model')
 
+    def evaluate(self):
+        self.env.reset()
+        self.set_init_state()
+
+        terminate = False
+        while not terminate:
+            action = self.choose_action()
+            self.env.render()
+            sleep(0.1)
+            new_frame, reward, terminate, _ = self.env.step(action)
+            self.update_state(new_frame)
+
+
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000)
 
-learner.train(100)
+learner.train(10)
+while True:
+    learner.evaluate()
 
