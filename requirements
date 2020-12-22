@@ -1,3 +1,4 @@
 matplotlib
 gym[atari]
 tensorflow
+tqdm

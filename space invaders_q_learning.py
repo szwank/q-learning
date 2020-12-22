@@ -6,6 +6,7 @@ import numpy as np
 import random
 
 from tensorflow.keras import layers, models, optimizers
+from tqdm import tqdm
 
 
 def to_gryscale(img):
@@ -164,9 +165,10 @@ class QLearner:
         return model
 
     def train(self, n_iterations):
+        print('Training Started')
         self.iteration = 1
 
-        while self.iteration <= n_iterations:
+        for _ in tqdm(range(n_iterations)):
             self.epoch()
             self.iteration += 1
 
@@ -263,6 +265,8 @@ class QLearner:
             [start_states, actions], actions * Q_values[:, None],
             epochs=1, batch_size=len(start_states), verbose=0
         )
+
+    
 
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000)
