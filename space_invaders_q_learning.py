@@ -167,9 +167,10 @@ class QLearner:
         Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
-        self.model.fit(
-            [start_states, actions], actions * Q_values[:, None],
-            epochs=1, batch_size=len(start_states), verbose=0
+        if len(start_states) is None:
+            print(start_states)
+        self.model.train_on_batch(
+            [start_states, actions], actions * Q_values[:, None]
         )
 
     def save_model(self):
