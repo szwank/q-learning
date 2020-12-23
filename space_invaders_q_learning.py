@@ -162,7 +162,6 @@ class QLearner:
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         next_Q_values = self.model.predict([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is 0 by definition, so override them
-        print(is_terminal)
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
         Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
