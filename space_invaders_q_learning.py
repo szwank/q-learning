@@ -134,7 +134,6 @@ class QLearner:
 
     def get_current_screen(self):
         screen = self.env.render(mode='rgb_array')
-        screen = screen / 255
         return self.preprocess_image(screen)
 
     def preprocess_image(self, img):
@@ -158,6 +157,7 @@ class QLearner:
 
     def choose_best_action(self):
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
+        state = state/255
         prediction = self.model.predict_on_batch([state, np.ones((1, self.n_actions))])
         return np.argmax(prediction)
 
