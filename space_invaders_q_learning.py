@@ -69,7 +69,7 @@ class QLearner:
     def train(self, n_iterations, plot=True, iteration=1):
         print('Training Started')
         self.iteration = iteration
-        self.i = 1
+        self.episode = 1
 
         for _ in tqdm(range(n_iterations)):
             self.epoch()
