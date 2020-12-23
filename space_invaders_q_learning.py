@@ -134,8 +134,8 @@ class QLearner:
         return max(0.1, 1 - (self.iteration - 1) * 1 / 1000000)
 
     def choose_best_action(self):
-        prediction = self.model.predict(np.array(self.state.to_list()), np.ones((1, self.n_actions)))
-        print(f'prediction: {prediction}')
+        state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
+        prediction = self.model.predict_on_batch([state, np.ones((1, self.n_actions))])
         return np.argmax(prediction)
 
     def update_state(self, screen):
