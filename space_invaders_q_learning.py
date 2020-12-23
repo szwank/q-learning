@@ -1,8 +1,6 @@
 from time import sleep
-from typing import List
 
 import gym
-import matplotlib.pyplot as plt
 import numpy as np
 import random
 
@@ -188,11 +186,10 @@ class QLearner:
             new_frame, reward, terminate, _ = self.env.step(action)
             self.update_state(new_frame)
 
+learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample])
 
+learner.train(100)
 
-learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000)
-
-learner.train(10)
-while True:
-    learner.evaluate()
+# while True:
+#     learner.evaluate()
 
