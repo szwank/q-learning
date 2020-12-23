@@ -155,11 +155,11 @@ class QLearner:
     def get_epsilon(self):
         return max(0.1, 1 - (self.episode - 1) * 1 / 1000000)
 
-    def choose_best_action(self):
+    def choose_best_action(self) -> int:
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
         state = state/255
         prediction = self.model.predict_on_batch([state, np.ones((1, self.n_actions))])
-        return np.argmax(prediction)
+        return int(np.argmax(prediction))
 
     def update_state(self, screen):
         self.state.append(screen)
@@ -197,14 +197,14 @@ class QLearner:
         while not terminate:
             action = self.choose_best_action()
             self.env.render()
-            sleep(0.1)
-            new_frame, reward, terminate, _ = self.env.step(action)
+            sleep(0.05)
+            new_frame, reward, terminate = self.env_step(action)
             self.update_state(new_frame)
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample])
 
-# learner.train(1, plot=False)
-
-while True:
-    learner.evaluate()
+learner.train(10, plot=False)
+#
+# while True:
+#     learner.evaluate()
 
