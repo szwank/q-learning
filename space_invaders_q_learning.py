@@ -32,7 +32,6 @@ class QLearner:
         self.n_actions = self.env.action_space.n
         self.model = self._get_model(model_input_size, self.n_actions)
         self.memory = ExperienceReplay(replay_size, n_state_frames)
-        self.iteration = 1
         self.preprocess_funcs = preprocess_funcs
         self.batch_size = batch_size
         self.state = RingBuf(n_state_frames)
