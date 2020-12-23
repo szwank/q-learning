@@ -80,15 +80,23 @@ class QLearner:
         terminate = False
         while not terminate:
             action = self.choose_action()
-            new_frame, reward, terminate, _ = self.env.step(action)
+            new_frame, reward, terminate = self.env_step(action)
             action_mask = self.encode_action(action)
             self.update_memory(action_mask, new_frame, reward, terminate)
             # update state
             self.update_state(new_frame)
 
         # Sample and fit
-        batch = self.memory.sample_batch(32)
-        self.fit_batch(*batch)
+        start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
+        start_states = start_states/255
+        next_states = next_states/255
+        self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+
+    def env_step(self, action: int):
+        """Call env.step and return preprocessed frame of new state."""
+        new_frame, reward, terminate, _ = self.env.step(action)
+        new_frame = self.preprocess_image(new_frame)
+        return new_frame, reward, terminate
 
     def update_memory(self, action_mask, new_frame, reward, terminate):
         pp_new_frame = self.preprocess_image(new_frame)
