@@ -66,7 +66,7 @@ class QLearner:
         model.compile(optimizer, loss='mse')
         return model
 
-    def train(self, n_iterations, plot=True, iteration=1):
+    def train(self, n_iterations, plot=True, iteration=1, verbose=True):
         print('Training Started')
         self.iteration = iteration
         self.episode = 1
@@ -75,6 +75,8 @@ class QLearner:
             self.epoch()
             self.iteration += 1
 
+            if verbose:
+                self.print_stats()
             if plot:
                 self.plot()
 
@@ -176,6 +178,11 @@ class QLearner:
         - is_terminal: numpy boolean array of whether the resulting state is terminal
 
         """
+        assert (0 <= start_states.all() <= 1)
+        assert (0 <= next_states.all() <= 1)
+        if rewards.any():
+            a = 1
+
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         next_Q_values = self.model.predict([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is 0 by definition, so override them
@@ -200,6 +207,9 @@ class QLearner:
             sleep(0.05)
             new_frame, reward, terminate = self.env_step(action)
             self.update_state(new_frame)
+
+    def print_stats(self):
+        print(f'iteration: {self.iteration}, episode: {self.episode}, epsilon: {self.get_epsilon()}')
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample])
 
