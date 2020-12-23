@@ -4,6 +4,7 @@ import gym
 import numpy as np
 import random
 
+from matplotlib import pyplot as plt
 from tensorflow.keras import layers, models, optimizers
 from tqdm import tqdm
 
@@ -37,6 +38,8 @@ class QLearner:
         self.state = RingBuf(n_state_frames)
         self.gamma = gamma
         self.iteration = None
+        self.episode = None
+        self.rewards = []
 
     def _get_model(self, input_size, n_actions):
         """Returns short conv model with mask at the end of the network."""
@@ -63,41 +66,56 @@ class QLearner:
         model.compile(optimizer, loss='mse')
         return model
 
-    def train(self, n_iterations):
+    def train(self, n_iterations, plot=True, iteration=1):
         print('Training Started')
-        self.iteration = 1
+        self.iteration = iteration
+        self.i = 1
 
         for _ in tqdm(range(n_iterations)):
             self.epoch()
             self.iteration += 1
 
+            if plot:
+                self.plot()
+
     def epoch(self):
         self.env.reset()
         self.set_init_state()
+        epoch_rewards = []
 
         terminate = False
         while not terminate:
             action = self.choose_action()
             new_frame, reward, terminate = self.env_step(action)
+            epoch_rewards.append(reward)
             action_mask = self.encode_action(action)
             self.update_memory(action_mask, new_frame, reward, terminate)
             # update state
             self.update_state(new_frame)
+            self.episode += 1
 
-        # Sample and fit
-        start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
-        start_states = start_states/255
-        next_states = next_states/255
-        self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+
+            if len(self.memory) >= 32:
+                # Sample and fit
+                start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
+                start_states = start_states/255
+                next_states = next_states/255
+                self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+        print(float(np.mean(epoch_rewards)))
+        self.rewards.append(float(np.mean(epoch_rewards)))
+
+    def plot(self):
+        plt.plot(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
+        plt.show(block=False)
 
     def env_step(self, action: int):
         """Call env.step and return preprocessed frame of new state."""
         new_frame, reward, terminate, _ = self.env.step(action)
         new_frame = self.preprocess_image(new_frame)
+        reward = self.clip_reward(reward)
         return new_frame, reward, terminate
 
     def update_memory(self, action_mask, new_frame, reward, terminate):
-        reward = self.clip_reward(reward)
         self.memory.add(self.state.to_list(), action_mask, new_frame, reward, terminate)
 
     def clip_reward(self, reward):
@@ -135,7 +153,7 @@ class QLearner:
         return action
 
     def get_epsilon(self):
-        return max(0.1, 1 - (self.iteration - 1) * 1 / 1000000)
+        return max(0.1, 1 - (self.episode - 1) * 1 / 1000000)
 
     def choose_best_action(self):
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
@@ -165,11 +183,7 @@ class QLearner:
         Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
-        if len(start_states) is None:
-            print(start_states)
-        self.model.train_on_batch(
-            [start_states, actions], actions * Q_values[:, None]
-        )
+        self.model.train_on_batch([start_states, actions], actions * Q_values[:, None])
 
     def save_model(self):
         self.model.save('model')
@@ -180,7 +194,7 @@ class QLearner:
 
         terminate = False
         while not terminate:
-            action = self.choose_action()
+            action = self.choose_best_action()
             self.env.render()
             sleep(0.1)
             new_frame, reward, terminate, _ = self.env.step(action)
@@ -188,8 +202,8 @@ class QLearner:
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample])
 
-learner.train(100)
+# learner.train(1, plot=False)
 
-# while True:
-#     learner.evaluate()
+while True:
+    learner.evaluate()
 
