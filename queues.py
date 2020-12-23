@@ -93,8 +93,8 @@ class ExperienceReplay:
             rewards.append(reward)
             terminate_state.append(terminate)
 
-        return np.swapaxes(np.array(states), 1, 3), np.array(actions), np.array(rewards), \
-               np.swapaxes(np.array(next_states), 1, 3), np.array(terminate_state)
+        return np.swapaxes(states, 1, 3), np.array(actions), np.array(rewards), \
+               np.swapaxes(next_states, 1, 3), np.array(terminate_state)
 
     def get_sample(self, idx):
         state = self.states[idx:idx + self.n_state_frames]
@@ -103,4 +103,4 @@ class ExperienceReplay:
         next_state = self.states[idx + 1:idx + self.n_state_frames + 1]
         terminate = self.teminate_state[idx]
 
-        return np.array(state), action, reward, next_state, terminate
+        return state, action, reward, next_state, terminate
