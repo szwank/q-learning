@@ -134,6 +134,7 @@ class QLearner:
 
     def get_current_screen(self):
         screen = self.env.render(mode='rgb_array')
+        screen = screen / 255
         return self.preprocess_image(screen)
 
     def preprocess_image(self, img):
