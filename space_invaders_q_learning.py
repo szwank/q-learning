@@ -99,13 +99,11 @@ class QLearner:
         return new_frame, reward, terminate
 
     def update_memory(self, action_mask, new_frame, reward, terminate):
-        pp_new_frame = self.preprocess_image(new_frame)
         reward = self.clip_reward(reward)
-        self.memory.add(self.state.to_list(), action_mask, pp_new_frame, reward, terminate)
+        self.memory.add(self.state.to_list(), action_mask, new_frame, reward, terminate)
 
     def clip_reward(self, reward):
         return np.sign(reward)
-
 
     def encode_action(self, action: int):
         action_mask = np.zeros((self.n_actions, ))
@@ -147,8 +145,7 @@ class QLearner:
         return np.argmax(prediction)
 
     def update_state(self, screen):
-        preprocessed_screen = self.preprocess_image(screen)
-        self.state.append(preprocessed_screen)
+        self.state.append(screen)
 
     def fit_batch(self, start_states, actions, rewards, next_states,
                   is_terminal):
