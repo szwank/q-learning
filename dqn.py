@@ -12,7 +12,7 @@ from queues import RingBuf, ExperienceReplay
 
 class QLearner:
     def __init__(self, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
-                 screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025):
+                 screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025, replay_start_size=50000):
         self.env = gym.make(env_name)
         self.n_state_frames = n_state_frames
         model_input_size = (*screen_size, n_state_frames)
@@ -27,6 +27,7 @@ class QLearner:
         self.batch_size = batch_size
         self.gamma = gamma
         self.lr = lr
+        self.replay_start_size = replay_start_size
 
         # functional
         self.iteration = None
@@ -89,8 +90,7 @@ class QLearner:
             self.update_state(new_frame)
             self.episode += 1
 
-
-            if len(self.memory) >= 32:
+            if len(self.memory) >= self.replay_start_size:
                 # Sample and fit
                 start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
                 start_states = start_states/255
