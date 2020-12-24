@@ -12,21 +12,27 @@ from queues import RingBuf, ExperienceReplay
 
 class QLearner:
     def __init__(self, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
-                 screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99):
+                 screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025):
         self.env = gym.make(env_name)
         self.n_state_frames = n_state_frames
         model_input_size = (*screen_size, n_state_frames)
         self.n_actions = self.env.action_space.n
         self.model = self._get_model(model_input_size, self.n_actions)
         self.memory = ExperienceReplay(replay_size, n_state_frames)
-        self.iteration = 1
         self.preprocess_funcs = preprocess_funcs
-        self.batch_size = batch_size
+
         self.state = RingBuf(n_state_frames)
+
+        # training parameters
+        self.batch_size = batch_size
         self.gamma = gamma
+        self.lr = lr
+
+        # functional
         self.iteration = None
         self.episode = None
         self.rewards = []
+        self.trained_on_n_frames = 0
 
     def _get_model(self, input_size, n_actions):
         """Returns short conv model with mask at the end of the network."""
@@ -49,7 +55,7 @@ class QLearner:
         x = layers.Multiply()([x, actions_input])
 
         model = models.Model(inputs=[screen_input, actions_input], outputs=x)
-        optimizer = optimizers.RMSprop(lr=0.00025, rho=0.95, epsilon=0.01)
+        optimizer = optimizers.RMSprop(lr=self.lr, rho=0.95, epsilon=0.01)
         model.compile(optimizer, loss='mse')
         return model
 
