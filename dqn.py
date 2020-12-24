@@ -69,7 +69,7 @@ class QLearner:
         self.n_actions_taken = 1
 
         for _ in tqdm(range(n_iterations)):
-            self.epoch()
+            self.episode()
             self.iteration += 1
 
             if verbose:
@@ -77,7 +77,7 @@ class QLearner:
             if plot:
                 self.plot()
 
-    def epoch(self):
+    def episode(self):
         self.env.reset()
         self.set_init_state()
         epoch_rewards = []
