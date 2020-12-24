@@ -56,7 +56,7 @@ class QLearner:
         x = layers.Multiply()([x, actions_input])
 
         model = models.Model(inputs=[screen_input, actions_input], outputs=x)
-        optimizer = optimizers.RMSprop(lr=self.lr, rho=0.95, epsilon=0.01)
+        optimizer = optimizers.RMSprop(lr=self.lr, rho=0.95, epsilon=0.01, momentum=0.95)
         model.compile(optimizer, loss='mse')
         return model
 
