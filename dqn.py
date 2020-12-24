@@ -34,6 +34,7 @@ class QLearner:
         # functional
         self.iteration = None
         self.n_actions_taken = None
+        self.frames_seen = 0
         self.rewards = []
         self.trained_on_n_frames = 0
 
@@ -100,6 +101,7 @@ class QLearner:
                 start_states = start_states/255
                 next_states = next_states/255
                 self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+                self.frames_seen += self.batch_size
         print(float(np.mean(epoch_rewards)))
         self.rewards.append(float(np.sum(epoch_rewards)))
 
