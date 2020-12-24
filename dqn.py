@@ -154,7 +154,7 @@ class QLearner:
         return action
 
     def get_epsilon(self):
-        return max(0.1, 1 - (self.n_actions_taken - 1) * 1 / self.final_exploration_frame)
+        return max(0.1, 1 - (self.frames_seen - 1) * 1 / self.final_exploration_frame)
 
     def choose_best_action(self) -> int:
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
