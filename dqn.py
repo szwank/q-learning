@@ -12,7 +12,8 @@ from queues import RingBuf, ExperienceReplay
 
 class QLearner:
     def __init__(self, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
-                 screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025, replay_start_size=50000):
+                 screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025, replay_start_size=50000,
+                 final_exploration_frame=1000000):
         self.env = gym.make(env_name)
         self.n_state_frames = n_state_frames
         model_input_size = (*screen_size, n_state_frames)
@@ -28,6 +29,7 @@ class QLearner:
         self.gamma = gamma
         self.lr = lr
         self.replay_start_size = replay_start_size
+        self.final_exploration_frame=final_exploration_frame
 
         # functional
         self.iteration = None
@@ -150,7 +152,7 @@ class QLearner:
         return action
 
     def get_epsilon(self):
-        return max(0.1, 1 - (self.n_actions_taken - 1) * 1 / 10000)
+        return max(0.1, 1 - (self.n_actions_taken - 1) * 1 / self.final_exploration_frame)
 
     def choose_best_action(self) -> int:
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
