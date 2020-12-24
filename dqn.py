@@ -31,7 +31,7 @@ class QLearner:
 
         # functional
         self.iteration = None
-        self.episode = None
+        self.n_actions_taken = None
         self.rewards = []
         self.trained_on_n_frames = 0
 
@@ -63,7 +63,7 @@ class QLearner:
     def train(self, n_iterations, plot=True, iteration=1, verbose=True):
         print('Training Started')
         self.iteration = iteration
-        self.episode = 1
+        self.n_actions_taken = 1
 
         for _ in tqdm(range(n_iterations)):
             self.epoch()
@@ -81,14 +81,16 @@ class QLearner:
 
         terminate = False
         while not terminate:
-            action = self.choose_action()
-            new_frame, reward, terminate = self.env_step(action)
-            epoch_rewards.append(reward)
-            action_mask = self.encode_action(action)
-            self.update_memory(action_mask, new_frame, reward, terminate)
-            # update state
-            self.update_state(new_frame)
-            self.episode += 1
+            actions_taken = 0
+            while actions_taken <= 4 and not terminate:
+                action = self.choose_action()
+                new_frame, reward, terminate = self.env_step(action)
+                epoch_rewards.append(reward)
+                action_mask = self.encode_action(action)
+                self.update_memory(action_mask, new_frame, reward, terminate)
+                # update state
+                self.update_state(new_frame)
+                self.n_actions_taken += 1
 
             if len(self.memory) >= self.replay_start_size:
                 # Sample and fit
@@ -148,7 +150,7 @@ class QLearner:
         return action
 
     def get_epsilon(self):
-        return max(0.1, 1 - (self.episode - 1) * 1 / 10000)
+        return max(0.1, 1 - (self.n_actions_taken - 1) * 1 / 10000)
 
     def choose_best_action(self) -> int:
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
@@ -202,7 +204,7 @@ class QLearner:
             self.update_state(new_frame)
 
     def print_stats(self):
-        print(f'iteration: {self.iteration}, episode: {self.episode}, epsilon: {self.get_epsilon()}')
+        print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, epsilon: {self.get_epsilon()}')
 
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000)
