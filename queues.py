@@ -69,7 +69,7 @@ class ExperienceReplay:
 
     def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
             terminate: bool):
-        # add only new_frame, the rest of them are all alreaty in buffer
+        # add only new_frame, the rest of them are all already in buffer
         if len(self.states) == 0:
             self.states.extend(state)
         self.states.append(new_frame)
