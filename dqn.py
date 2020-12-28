@@ -30,7 +30,6 @@ class QLearner:
         self.n_actions_taken = None
         self.trained_on_n_frames = 0
         self.rewards = []
-        self.trained_on_n_frames = 0
 
         # other stuff initialization
         self.env = gym.make(env_name)
@@ -88,19 +87,23 @@ class QLearner:
         model.compile(optimizer, loss='mse')
         return model
 
-    def train(self, n_iterations, plot=True, iteration=1, verbose=True):
+    def train(self, n_frames, plot=True, iteration=1, verbose=True):
         print('Training Started')
         self.iteration = iteration
         self.n_actions_taken = 0
 
-        for _ in tqdm(range(n_iterations)):
-            self.iteration += 1
-            self.episode()
+        with tqdm(total=n_frames) as progress_bar:
 
-            if verbose:
-                self.print_stats()
-            if plot:
-                self.plot()
+            while self.trained_on_n_frames < n_frames:
+                self.iteration += 1
+                self.episode()
+
+                progress_bar.update(self.trained_on_n_frames - progress_bar.last_print_n)
+
+                if verbose:
+                    self.print_stats()
+                if plot:
+                    self.plot()
 
     def episode(self):
         self.env.reset()
@@ -185,6 +188,7 @@ class QLearner:
         return max(0.1, 1 - (self.trained_on_n_frames - 1) * 1 / self.final_exploration_frame)
 
     def choose_best_action(self) -> int:
+        # swith chanel axis and add additional dimension(batch size) expected by network
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
         state = state/255
         prediction = self.model.predict_on_batch([state, np.ones((1, self.n_actions))])
@@ -239,7 +243,7 @@ class QLearner:
         print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
               f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
 
-learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000)
+learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000, replay_start_size=100)
 
 learner.train(100)
 
