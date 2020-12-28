@@ -28,7 +28,7 @@ class QLearner:
         # functional
         self.iteration = None
         self.n_actions_taken = None
-        self.frames_seen = 0
+        self.trained_on_n_frames = 0
         self.rewards = []
         self.trained_on_n_frames = 0
 
@@ -130,7 +130,7 @@ class QLearner:
         start_states = start_states / 255
         next_states = next_states / 255
         self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
-        self.frames_seen += self.batch_size
+        self.trained_on_n_frames += self.batch_size
 
     def plot(self):
         plt.plot(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
@@ -181,7 +181,7 @@ class QLearner:
         return action
 
     def get_epsilon(self):
-        return max(0.1, 1 - (self.frames_seen - 1) * 1 / self.final_exploration_frame)
+        return max(0.1, 1 - (self.trained_on_n_frames - 1) * 1 / self.final_exploration_frame)
 
     def choose_best_action(self) -> int:
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
