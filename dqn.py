@@ -42,7 +42,8 @@ class QLearner:
         self.state = RingBuf(n_state_frames)
 
     def _get_model(self, input_size, n_actions):
-        """Returns short conv model with mask at the end of the network. Network is interpretation of original network from papers."""
+        """Returns short conv model with mask at the end of the network. Network is interpretation of original network
+        from papers."""
         screen_input = layers.Input(input_size)
         actions_input = layers.Input(n_actions)
 
@@ -235,8 +236,8 @@ class QLearner:
             self.update_state(new_frame)
 
     def print_stats(self):
-        print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, epsilon: {self.get_epsilon()}')
-
+        print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
+              f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000)
 
