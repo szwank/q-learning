@@ -108,22 +108,73 @@ class ExperienceReplay:
 
 
 class PrioritizedExperienceReplayNode:
-    def __init__(self, error, parent=None, left=None, right=None):
+    def __init__(self, error, index=None, parent=None, left=None, right=None):
+        self.epsilon = 0.0001
         self.parent = parent
         self.left = left
         self.right = right
-        self.error = error
+        self._error = error
+        self.index = index
 
     @property
     def is_leaf(self):
         return self.left is None and self.right is None
+
+    @property
+    def error(self):
+        if self._error is not None and self.is_leaf:
+            return self._error + self.epsilon
+        else:
+            return self._error
+
+    @classmethod
+    def from_list(cls, data):
+        """Initialize binary tree for given list. Empty nodes should have value of None."""
+        lower_nodes = deque()
+        upper_nodes = deque()
+
+        for i, error in enumerate(data):
+            node = cls(error=error, index=i)
+            lower_nodes.append(node)
+
+        nodes = list(lower_nodes)
+
+        # lower_nodes will have len of one when only root node will be left
+        while len(lower_nodes) != 1:
+            while len(lower_nodes):
+                l_node = lower_nodes.pop()
+                r_node = lower_nodes.pop()
+
+                node = cls(error=l_node.error + r_node.error, left=l_node, right=r_node)
+
+                l_node.parent = node
+                r_node.parent = node
+
+                upper_nodes.append(node)
+
+            lower_nodes, upper_nodes = upper_nodes, lower_nodes
+        return nodes, lower_nodes.pop()
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
     def __init__(self, size, n_state_frames):
         super().__init__(size, n_state_frames)
 
-        self.errors = PrioritizedExperienceReplayNode(error=None)
+        self.errors = PrioritizedExperienceReplayNode()
+
+    def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
+            terminate: bool):
+        # add only new_frame, the rest of them are all already in buffer
+        if len(self.states) == 0:
+            self.states.extend(state)
+        self.states.append(new_frame)
+        self.actions.append(action)
+        self.rewards.append(reward)
+        self.terminate_state.append(terminate)
+
+        self.errors
+
+
 
 
 
