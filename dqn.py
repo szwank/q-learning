@@ -15,14 +15,15 @@ from queues import RingBuf, ExperienceReplay
 class QLearner:
     def __init__(self, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
                  screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025, replay_start_size=50000,
-                 final_exploration_frame=1000000):
+                 final_exploration_frame=1000000, update_between_n_episodes=4):
         # training parameters
         self.batch_size = batch_size
         self.gamma = gamma
         self.lr = lr
         self.replay_start_size = replay_start_size
-        self.final_exploration_frame=final_exploration_frame
+        self.final_exploration_frame = final_exploration_frame
         self.n_state_frames = n_state_frames
+        self.update_between_n_episodes = update_between_n_episodes
 
         # functional
         self.iteration = None
@@ -108,7 +109,7 @@ class QLearner:
         terminate = False
         while not terminate:
             actions_taken = 0
-            while actions_taken <= 4 and not terminate:
+            while actions_taken <= self.update_between_n_episodes and not terminate:
                 action = self.choose_action()
                 new_frame, reward, terminate = self.env_step(action)
                 epoch_rewards.append(reward)
@@ -119,14 +120,17 @@ class QLearner:
                 self.n_actions_taken += 1
 
             if len(self.memory) >= self.replay_start_size:
-                # Sample and fit
-                start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
-                start_states = start_states/255
-                next_states = next_states/255
-                self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
-                self.frames_seen += self.batch_size
+                self._update_network()
 
         self.rewards.append(float(np.sum(epoch_rewards)))
+
+    def _update_network(self):
+        # Sample and fit
+        start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
+        start_states = start_states / 255
+        next_states = next_states / 255
+        self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+        self.frames_seen += self.batch_size
 
     def plot(self):
         plt.plot(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
