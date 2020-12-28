@@ -89,7 +89,7 @@ class QLearner:
     def train(self, n_iterations, plot=True, iteration=1, verbose=True):
         print('Training Started')
         self.iteration = iteration
-        self.n_actions_taken = 1
+        self.n_actions_taken = 0
 
         for _ in tqdm(range(n_iterations)):
             self.episode()
