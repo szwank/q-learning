@@ -19,7 +19,7 @@ from queues import RingBuf, ExperienceReplay
 class QLearner:
     def __init__(self, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
                  screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025, replay_start_size=50000,
-                 final_exploration_frame=1000000, update_between_n_episodes=4):
+                 final_exploration_frame=1000000, update_between_n_episodes=4, update_network_period=10000):
         # training parameters
         self.batch_size = batch_size
         self.gamma = gamma
@@ -28,6 +28,7 @@ class QLearner:
         self.final_exploration_frame = final_exploration_frame
         self.n_state_frames = n_state_frames
         self.n_games_between_update = update_between_n_episodes
+        self.update_network_period = update_network_period
 
         # functional
         self.iteration = None
@@ -101,20 +102,35 @@ class QLearner:
         self.iteration = iteration
         self.n_actions_taken = 0
 
+        self._init_experience_replay()
+
+        update_target_network_after_n_iteration = round(self.update_network_period/self.batch_size)
+
         with tqdm(total=n_frames) as progress_bar:
 
             while self.trained_on_n_frames < n_frames:
-                self.iteration += 1
+
                 self.episode()
-                
-                print(gc.collect())
+                self.iteration += 1
+
+                gc.collect()
 
                 progress_bar.update(self.trained_on_n_frames - progress_bar.last_print_n)
 
+                if self.iteration % update_target_network_after_n_iteration == 0:
+                    self.update_target_network()
                 if verbose:
                     self.print_stats()
                 if plot:
                     self.plot()
+
+    def _init_experience_replay(self):
+        """Fill experience replay memory with states-actions by plying the game."""
+        while len(self.memory) < self.replay_start_size:
+            self._play_game()
+
+    def update_target_network(self):
+        self.target_network.set_weights(self.network.get_weights())
 
     def episode(self):
         """Simulate on episode of training"""
@@ -129,8 +145,7 @@ class QLearner:
             print(f"Sum of game rewards: {total_reward}")
             self.rewards.append(total_reward)
 
-        if len(self.memory) >= self.replay_start_size:
-            self._update_network()
+        self._update_network()
 
     def _play_game(self) -> List[int or float]:
         """Play one game until termination state. Returns gained rewards per action."""
@@ -230,10 +245,12 @@ class QLearner:
         """
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         next_Q_values = self.network.predict([next_states, np.ones(actions.shape)])
+        next_Q_targets = self.target_network.predict([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is 0 by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
-        Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
+        greedy_policy_action = np.argmax(next_Q_targets, axis=1)
+        Q_values = rewards + self.gamma * np.take(next_Q_values, greedy_policy_action)
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
         self.network.train_on_batch([start_states, actions], actions * Q_values[:, None])
@@ -257,7 +274,7 @@ class QLearner:
         print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
               f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
 
-learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000 * 300)
+learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000 * 300, replay_start_size=100, final_exploration_frame=1)
 
 learner.train(plot=False)
 
