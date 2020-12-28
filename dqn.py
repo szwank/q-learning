@@ -116,7 +116,7 @@ class QLearner:
                     self.plot()
 
     def episode(self):
-
+        """Simulate on episode of training"""
         games_played = 0
 
         while games_played < self.n_games_between_update:
