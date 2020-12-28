@@ -39,7 +39,8 @@ class QLearner:
         self.env = gym.make(env_name)
         self.n_actions = self.env.action_space.n
         model_input_size = (*screen_size, n_state_frames)
-        self.model = self._get_original_model(model_input_size, self.n_actions)
+        self.network = self._get_original_model(model_input_size, self.n_actions)
+        self.target_network = self._get_original_model(model_input_size, self.n_actions)
         self.memory = ExperienceReplay(replay_size, n_state_frames)
         self.preprocess_funcs = preprocess_funcs
         self.state = RingBuf(n_state_frames)
@@ -209,7 +210,7 @@ class QLearner:
     def choose_best_action(self) -> int:
         # switch channel axis and add additional dimension(batch size) expected by network
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
-        prediction = self.model.predict_on_batch([state, np.ones((1, self.n_actions))])
+        prediction = self.network.predict_on_batch([state, np.ones((1, self.n_actions))])
         return int(np.argmax(prediction))
 
     def update_state(self, screen):
@@ -227,23 +228,18 @@ class QLearner:
         - is_terminal: numpy boolean array of whether the resulting state is terminal
 
         """
-        assert (0 <= start_states.all() <= 1)
-        assert (0 <= next_states.all() <= 1)
-        if rewards.any():
-            a = 1
-
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
-        next_Q_values = self.model.predict([next_states, np.ones(actions.shape)])
+        next_Q_values = self.network.predict([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is 0 by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
         Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
-        self.model.train_on_batch([start_states, actions], actions * Q_values[:, None])
+        self.network.train_on_batch([start_states, actions], actions * Q_values[:, None])
 
     def save_model(self):
-        self.model.save('model')
+        self.network.save('model')
 
     def evaluate(self):
         self.env.reset()
@@ -263,5 +259,5 @@ class QLearner:
 
 learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000 * 300)
 
-learner.train()
+learner.train(plot=False)
 
