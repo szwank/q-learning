@@ -205,7 +205,7 @@ class QLearner:
         return action
 
     def get_epsilon(self):
-        return max(0.1, 1 - (self.trained_on_n_frames - 1) * 1 / self.final_exploration_frame)
+        return max(0.1, 1 - self.trained_on_n_frames / self.final_exploration_frame)
 
     def choose_best_action(self) -> int:
         # switch channel axis and add additional dimension(batch size) expected by network
