@@ -1,7 +1,10 @@
 from time import sleep
 import gc
+from typing import List
 
 import gym
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 import random
@@ -24,7 +27,7 @@ class QLearner:
         self.replay_start_size = replay_start_size
         self.final_exploration_frame = final_exploration_frame
         self.n_state_frames = n_state_frames
-        self.update_between_n_episodes = update_between_n_episodes
+        self.n_games_between_update = update_between_n_episodes
 
         # functional
         self.iteration = None
@@ -103,7 +106,7 @@ class QLearner:
                 self.iteration += 1
                 self.episode()
                 
-                gc.collect()
+                print(gc.collect())
 
                 progress_bar.update(self.trained_on_n_frames - progress_bar.last_print_n)
 
@@ -113,27 +116,38 @@ class QLearner:
                     self.plot()
 
     def episode(self):
+
+        games_played = 0
+
+        while games_played < self.n_games_between_update:
+            game_rewards = self._play_game()
+
+            games_played += 1
+
+            total_reward = sum(game_rewards)
+            print(f"Sum of game rewards: {total_reward}")
+            self.rewards.append(total_reward)
+
+        if len(self.memory) >= self.replay_start_size:
+            self._update_network()
+
+    def _play_game(self) -> List[int or float]:
+        """Play one game until termination state. Returns gained rewards per action."""
         self.env.reset()
         self.set_init_state()
-        epoch_rewards = []
 
+        game_rewards = []
         terminate = False
         while not terminate:
-            actions_taken = 0
-            while actions_taken <= self.update_between_n_episodes and not terminate:
-                action = self.choose_action()
-                new_frame, reward, terminate = self.env_step(action)
-                epoch_rewards.append(reward)
-                action_mask = self.encode_action(action)
-                self.update_memory(action_mask, new_frame, reward, terminate)
-                # update state
-                self.update_state(new_frame)
-                self.n_actions_taken += 1
-
-            if len(self.memory) >= self.replay_start_size:
-                self._update_network()
-
-        self.rewards.append(float(np.sum(epoch_rewards)))
+            action = self.choose_action()
+            new_frame, reward, terminate = self.env_step(action)
+            game_rewards.append(reward)
+            action_mask = self.encode_action(action)
+            self.update_memory(action_mask, new_frame, reward, terminate)
+            # update state
+            self.update_state(new_frame)
+            self.n_actions_taken += 1
+        return game_rewards
 
     def _update_network(self):
         # Sample and fit
@@ -247,7 +261,7 @@ class QLearner:
         print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
               f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
 
-learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000, replay_start_size=1000)
+learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000 * 300)
 
 learner.train()
 
