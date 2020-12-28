@@ -95,7 +95,6 @@ class QLearner:
             self.update_state(new_frame)
             self.episode += 1
 
-
             if len(self.memory) >= 32:
                 # Sample and fit
                 start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
