@@ -1,6 +1,7 @@
 from typing import List
 
 import numpy as np
+from collections import deque
 
 
 class RingBuf:
@@ -104,3 +105,28 @@ class ExperienceReplay:
         terminate = self.teminate_state[idx]
 
         return state, action, reward, next_state, terminate
+
+
+class PrioritizedExperienceReplayNode:
+    def __init__(self, error, parent=None, left=None, right=None):
+        self.parent = parent
+        self.left = left
+        self.right = right
+        self.error = error
+
+    @property
+    def is_leaf(self):
+        return self.left is None and self.right is None
+
+
+class PrioritizedExperienceReplay(ExperienceReplay):
+    def __init__(self, size, n_state_frames):
+        super().__init__(size, n_state_frames)
+
+        self.errors = PrioritizedExperienceReplayNode(error=None)
+
+
+
+
+
+
