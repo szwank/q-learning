@@ -39,7 +39,7 @@ class QLearner:
         self.state = RingBuf(n_state_frames)
 
     def _get_model(self, input_size, n_actions):
-        """Returns short conv model with mask at the end of the network."""
+        """Returns short conv model with mask at the end of the network. Network is interpretation of original network from papers."""
         screen_input = layers.Input(input_size)
         actions_input = layers.Input(n_actions)
 
@@ -51,6 +51,27 @@ class QLearner:
 
         x = layers.Conv2D(32, (3, 3), padding='same')(x)
         x = layers.Conv2D(32, (3, 3), padding='same')(x)
+        x = layers.ReLU()(x)
+
+        x = layers.Flatten()(x)
+        x = layers.Dense(256, activation='relu')(x)
+        x = layers.Dense(n_actions)(x)
+        x = layers.Multiply()([x, actions_input])
+
+        model = models.Model(inputs=[screen_input, actions_input], outputs=x)
+        optimizer = optimizers.RMSprop(lr=self.lr, rho=0.95, epsilon=0.01, momentum=0.95)
+        model.compile(optimizer, loss='mse')
+        return model
+
+    def _get_original_model(self, input_size, n_actions):
+        """Returns short conv model with mask at the end of the network. Copy of network from papers."""
+        screen_input = layers.Input(input_size)
+        actions_input = layers.Input(n_actions)
+
+        x = layers.Conv2D(16, (8, 8), strides=(4, 4))(screen_input)
+        x = layers.ReLU()(x)
+
+        x = layers.Conv2D(32, (4, 4), strides=(2, 2))(x)
         x = layers.ReLU()(x)
 
         x = layers.Flatten()(x)
