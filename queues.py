@@ -84,8 +84,8 @@ class ExperienceReplay:
         next_states = []
         terminate_state = []
         # remove -2 because -1 is from counting from 0 and -1 is from counting most
-        # current frame as first one and foutrue frame as +1 frame
-        for i in np.random.randint(0, len(self) - 1, n):
+        # current frame as first one and future frame as +1 frame
+        for i in np.random.randint(0, len(self)-1, n):
             state, action, reward, next_state, terminate = self.get_sample(i)
             states.append(state)
             actions.append(action)
