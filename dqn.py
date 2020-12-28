@@ -92,8 +92,8 @@ class QLearner:
         self.n_actions_taken = 0
 
         for _ in tqdm(range(n_iterations)):
-            self.episode()
             self.iteration += 1
+            self.episode()
 
             if verbose:
                 self.print_stats()
