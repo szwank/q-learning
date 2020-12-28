@@ -125,7 +125,7 @@ class QLearner:
                 next_states = next_states/255
                 self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
                 self.frames_seen += self.batch_size
-        print(float(np.mean(epoch_rewards)))
+
         self.rewards.append(float(np.sum(epoch_rewards)))
 
     def plot(self):
