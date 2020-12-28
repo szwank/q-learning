@@ -193,7 +193,7 @@ class QLearner:
         return max(0.1, 1 - (self.trained_on_n_frames - 1) * 1 / self.final_exploration_frame)
 
     def choose_best_action(self) -> int:
-        # swith chanel axis and add additional dimension(batch size) expected by network
+        # switch channel axis and add additional dimension(batch size) expected by network
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
         prediction = self.model.predict_on_batch([state, np.ones((1, self.n_actions))])
         return int(np.argmax(prediction))
