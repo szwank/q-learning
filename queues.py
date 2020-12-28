@@ -122,8 +122,12 @@ class PrioritizedExperienceReplayNode:
 
     @property
     def error(self):
-        if self._error is not None and self.is_leaf:
-            return self._error + self.epsilon
+        """Returns modified _error value. If error is none returns 0. If error is leaf returns value modified by
+        epsilon. in other cases returns exact value of _error field"""
+        if self.is_leaf:
+            return self.error + self.epsilon
+        elif self._error is None:
+            return 0
         else:
             return self._error
 
@@ -154,6 +158,15 @@ class PrioritizedExperienceReplayNode:
 
             lower_nodes, upper_nodes = upper_nodes, lower_nodes
         return nodes, lower_nodes.pop()
+
+    def update_value(self, error):
+        """Updates error value of node and its parents."""
+        self._error = error
+        self.parent.__update_value()
+
+    def __update_value(self):
+        """Update error value base on child nodes."""
+        self._error = self.left.error + self.right.error
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
