@@ -62,7 +62,7 @@ class ExperienceReplay:
         self.states = RingBuf(size + n_state_frames)
         self.actions = RingBuf(size)
         self.rewards = RingBuf(size)
-        self.teminate_state = RingBuf(size)
+        self.terminate_state = RingBuf(size)
 
     def __len__(self):
         return len(self.actions)
@@ -75,7 +75,7 @@ class ExperienceReplay:
         self.states.append(new_frame)
         self.actions.append(action)
         self.rewards.append(reward)
-        self.teminate_state.append(terminate)
+        self.terminate_state.append(terminate)
 
     def sample_batch(self, n):
         """Returns batch of samples."""
@@ -102,7 +102,7 @@ class ExperienceReplay:
         action = self.actions[idx]
         reward = self.rewards[idx]
         next_state = self.states[idx + 1:idx + self.n_state_frames + 1]
-        terminate = self.teminate_state[idx]
+        terminate = self.terminate_state[idx]
 
         return state, action, reward, next_state, terminate
 
