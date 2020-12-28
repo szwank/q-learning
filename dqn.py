@@ -1,4 +1,5 @@
 from time import sleep
+import gc
 
 import gym
 import matplotlib.pyplot as plt
@@ -45,8 +46,10 @@ class QLearner:
         from papers."""
         screen_input = layers.Input(input_size)
         actions_input = layers.Input(n_actions)
+        
+        x = layers.Lambda(lambda x: x/255.0)(screen_input)
 
-        x = layers.Conv2D(16, (3, 3), padding='same')(screen_input)
+        x = layers.Conv2D(16, (3, 3), padding='same')(x)
         x = layers.Conv2D(16, (3, 3), padding='same')(x)
         x = layers.Conv2D(16, (3, 3), padding='same')(x)
         x = layers.Conv2D(16, (3, 3), padding='same')(x)
@@ -71,7 +74,9 @@ class QLearner:
         screen_input = layers.Input(input_size)
         actions_input = layers.Input(n_actions)
 
-        x = layers.Conv2D(16, (8, 8), strides=(4, 4))(screen_input)
+        x = layers.Lambda(lambda x: x / 255.0)(screen_input)
+
+        x = layers.Conv2D(16, (8, 8), strides=(4, 4))(x)
         x = layers.ReLU()(x)
 
         x = layers.Conv2D(32, (4, 4), strides=(2, 2))(x)
@@ -87,7 +92,7 @@ class QLearner:
         model.compile(optimizer, loss='mse')
         return model
 
-    def train(self, n_frames, plot=True, iteration=1, verbose=True):
+    def train(self, n_frames=1000000, plot=True, iteration=1, verbose=True):
         print('Training Started')
         self.iteration = iteration
         self.n_actions_taken = 0
@@ -97,6 +102,8 @@ class QLearner:
             while self.trained_on_n_frames < n_frames:
                 self.iteration += 1
                 self.episode()
+                
+                gc.collect()
 
                 progress_bar.update(self.trained_on_n_frames - progress_bar.last_print_n)
 
@@ -131,8 +138,6 @@ class QLearner:
     def _update_network(self):
         # Sample and fit
         start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
-        start_states = start_states / 255
-        next_states = next_states / 255
         self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
         self.trained_on_n_frames += self.batch_size
 
@@ -190,7 +195,6 @@ class QLearner:
     def choose_best_action(self) -> int:
         # swith chanel axis and add additional dimension(batch size) expected by network
         state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
-        state = state/255
         prediction = self.model.predict_on_batch([state, np.ones((1, self.n_actions))])
         return int(np.argmax(prediction))
 
@@ -243,7 +247,7 @@ class QLearner:
         print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
               f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
 
-learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000, replay_start_size=100)
+learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000, replay_start_size=1000)
 
-learner.train(100)
+learner.train()
 
