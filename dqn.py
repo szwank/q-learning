@@ -14,22 +14,13 @@ class QLearner:
     def __init__(self, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
                  screen_size=(74, 85), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025, replay_start_size=50000,
                  final_exploration_frame=1000000):
-        self.env = gym.make(env_name)
-        self.n_state_frames = n_state_frames
-        model_input_size = (*screen_size, n_state_frames)
-        self.n_actions = self.env.action_space.n
-        self.model = self._get_model(model_input_size, self.n_actions)
-        self.memory = ExperienceReplay(replay_size, n_state_frames)
-        self.preprocess_funcs = preprocess_funcs
-
-        self.state = RingBuf(n_state_frames)
-
         # training parameters
         self.batch_size = batch_size
         self.gamma = gamma
         self.lr = lr
         self.replay_start_size = replay_start_size
         self.final_exploration_frame=final_exploration_frame
+        self.n_state_frames = n_state_frames
 
         # functional
         self.iteration = None
@@ -37,6 +28,15 @@ class QLearner:
         self.frames_seen = 0
         self.rewards = []
         self.trained_on_n_frames = 0
+
+        # other stuff initialization
+        self.env = gym.make(env_name)
+        self.n_actions = self.env.action_space.n
+        model_input_size = (*screen_size, n_state_frames)
+        self.model = self._get_original_model(model_input_size, self.n_actions)
+        self.memory = ExperienceReplay(replay_size, n_state_frames)
+        self.preprocess_funcs = preprocess_funcs
+        self.state = RingBuf(n_state_frames)
 
     def _get_model(self, input_size, n_actions):
         """Returns short conv model with mask at the end of the network."""
