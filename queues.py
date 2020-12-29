@@ -181,6 +181,21 @@ class PrioritizedExperienceReplayNode:
         if self.parent_exists:
             self.parent.__update_value()
 
+    def proportional_sample(self, value):
+        """Return index of given value. Probability of sampling index is proportional to its error value."""
+        if value > self.error:
+            raise ValueError(f"Value is to high. Sum of tree is {self.error}")
+        return self.__proportional_sample
+
+    def __proportional_sample(self, value):
+        if self.is_leaf:
+            return self.index
+
+        if self.right and value > self.right.error:
+            return self.right.__proportional_sample(value)
+        else:
+            return self.left.__proportional_sample(value-self.left.error)
+
 
 class PrioritizedExperienceReplay(ExperienceReplay):
     def __init__(self, size, n_state_frames):
