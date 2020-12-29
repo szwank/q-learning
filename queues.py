@@ -77,6 +77,10 @@ class ExperienceReplay:
         self.rewards.append(reward)
         self.terminate_state.append(terminate)
 
+    def extend(self, states, actions, new_frames, rewards, terminates):
+        for s, a, nf, r, t in zip(states, actions, new_frames, rewards, terminates):
+            self.add(s, a, nf, r, t)
+
     def sample_batch(self, n):
         """Returns batch of samples."""
         states = []
@@ -94,8 +98,7 @@ class ExperienceReplay:
             rewards.append(reward)
             terminate_state.append(terminate)
 
-        return np.swapaxes(states, 1, 3), np.array(actions), np.array(rewards), \
-               np.swapaxes(next_states, 1, 3), np.array(terminate_state)
+        return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(terminate_state)
 
     def get_sample(self, idx):
         state = self.states[idx:idx + self.n_state_frames]
@@ -104,7 +107,23 @@ class ExperienceReplay:
         next_state = self.states[idx + 1:idx + self.n_state_frames + 1]
         terminate = self.terminate_state[idx]
 
-        return state, action, reward, next_state, terminate
+        return np.moveaxis(state, 0, 2), action, reward, np.moveaxis(next_state, 0, 2), terminate
+
+    def get_all(self):
+        states = []
+        actions = []
+        rewards = []
+        next_states = []
+        terminate_state = []
+        for i in range(len(self)):
+            state, action, reward, next_state, terminate = self.get_sample(i)
+            states.append(state)
+            actions.append(action)
+            next_states.append(next_state)
+            rewards.append(reward)
+            terminate_state.append(terminate)
+
+        return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(terminate_state)
 
 
 class TreeNode:
@@ -267,6 +286,10 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         super().add(state, action, new_frame, reward, terminate)
         self.errors.append(error)
 
+    def extend(self, states, actions, new_frames, rewards, terminates, errors):
+        for s, a, nf, r, t, e in zip(states, actions, new_frames, rewards, terminates, errors):
+            self.add(s, a, nf, r, t, e)
+
     def sample_batch(self, n):
         """Returns batch of samples."""
         states = []
@@ -284,8 +307,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             rewards.append(reward)
             terminate_state.append(terminate)
 
-        return np.swapaxes(states, 1, 3), np.array(actions), np.array(rewards), \
-               np.swapaxes(next_states, 1, 3), np.array(terminate_state)
+        return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(terminate_state)
 
     def random(self, n):
         """Returns n random numbers from range <0, self.error.error_sum>."""
