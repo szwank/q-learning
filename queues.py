@@ -122,12 +122,14 @@ class PrioritizedExperienceReplayNode:
 
     @property
     def error(self):
-        """Returns modified _error value. Returns _error value modified by epsilon value.
-        If _error value is None returns 0."""
+        """Returns modified _error value. Returns _error value modified by epsilon value if its leaf node.
+        If _error value is None returns 0. In other cases returns 0"""
         if self._error is None:
             return 0
-        else:
+        elif self.is_leaf:
             return self._error + self.epsilon
+        else:
+            return self._error
 
     @property
     def parent_exists(self):
