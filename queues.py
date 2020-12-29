@@ -113,7 +113,11 @@ class TreeNode:
         self.parent = parent
         self.left = left
         self.right = right
-        self.value = value
+        self._value = value
+
+    @property
+    def value(self):
+        return self._value
 
     @property
     def is_leaf(self):
@@ -123,15 +127,15 @@ class TreeNode:
     def parent_exists(self):
         return self.parent is not None
 
-    def update_value(self, error):
+    def update_value(self, value):
         """Updates error value of node and its parents."""
-        self._error = error
+        self._value = value
         if self.parent_exists:
             self.parent.__update_value()
 
     def __update_value(self):
         """Update error value base on child nodes."""
-        self._error = self.left.error + self.right.error
+        self._value = self.left.value + self.right.value
         if self.parent_exists:
             self.parent.__update_value()
 
@@ -139,21 +143,21 @@ class TreeNode:
 class PrioritizedExperienceReplayNode(TreeNode):
     """Node of unsorted binary tree. value of _error field equal to None indices unused node in tree.
     Only leaf nodes can be unused. """
-    def __init__(self, error, index=None, parent=None, left=None, right=None):
-        super().__init__(value=error, parent=parent, left=left, right=right)
+    def __init__(self, value, index=None, parent=None, left=None, right=None):
+        super().__init__(value=value, parent=parent, left=left, right=right)
         self.epsilon = 0.0001
         self.index = index
 
     @property
-    def error(self):
+    def value(self):
         """Returns modified _error value. Returns _error value modified by epsilon value if its leaf node.
         If _error value is None returns 0. In other cases returns 0"""
-        if self.value is None:
+        if self._value is None:
             return 0
         elif self.is_leaf:
-            return self.value + self.epsilon
+            return self._value + self.epsilon
         else:
-            return self.value
+            return self._value
 
     @classmethod
     def from_list(cls, data):
@@ -162,7 +166,7 @@ class PrioritizedExperienceReplayNode(TreeNode):
         upper_nodes = deque()
 
         for i, error in enumerate(data):
-            node = cls(error=error, index=i)
+            node = cls(value=error, index=i)
             lower_nodes.append(node)
 
         nodes = list(lower_nodes)
@@ -175,9 +179,9 @@ class PrioritizedExperienceReplayNode(TreeNode):
                 if len(lower_nodes):
                     r_node = lower_nodes.pop()
                 else:
-                    r_node = cls(error=None)
+                    r_node = cls(value=None)
 
-                node = cls(error=l_node.error + r_node.error, left=l_node, right=r_node)
+                node = cls(value=l_node.value + r_node.value, left=l_node, right=r_node)
 
                 l_node.parent = node
                 r_node.parent = node
@@ -193,18 +197,19 @@ class PrioritizedExperienceReplayNode(TreeNode):
 
     def proportional_sample(self, value):
         """Return index of given value. Probability of sampling index is proportional to its error value."""
-        if value > self.error:
-            raise ValueError(f"Value is to high. Sum of tree is {self.error}")
-        return self.__proportional_sample
+        if value > self.value:
+            raise ValueError(f"Value is to high. Sum of tree is {self.value}")
+        return self.__proportional_sample(value)
 
     def __proportional_sample(self, value):
         if self.is_leaf:
             return self.index
 
-        if self.right and value > self.right.error:
-            return self.right.__proportional_sample(value)
+        if self.right and value > self.left.value:
+            # if we go right we need to subtract value of left node, so we can work in local subtree
+            return self.right.__proportional_sample(value - self.left.value)
         else:
-            return self.left.__proportional_sample(value-self.left.error)
+            return self.left.__proportional_sample(value)
 
 
 class PrioritizedRingBuf(RingBuf):
@@ -219,10 +224,10 @@ class PrioritizedRingBuf(RingBuf):
 
     @property
     def error_sum(self):
-        return self.root.error
+        return self.root._value
 
     def append(self, element):
-        self.data[self.end].value = element
+        self.data[self.end].update_value(element)
         self.end = (self.end + 1) % len(self.data)
         # end == start and yet we just added one element. This means the buffer has one
         # too many element. Remove the first element by incrementing start.
@@ -269,10 +274,9 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         rewards = []
         next_states = []
         terminate_state = []
-        # remove -2 because -1 is from counting from 0 and -1 is from counting most
-        # current frame as first one and future frame as +1 frame
-        for i in self.random(n):
-            index = self.errors.sample(i)
+        for value in self.random(n):
+            # sample with probability proportional to error value
+            index = self.errors.sample(value)
             state, action, reward, next_state, terminate = self.get_sample(index)
             states.append(state)
             actions.append(action)
