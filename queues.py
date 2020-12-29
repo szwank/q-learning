@@ -107,35 +107,68 @@ class ExperienceReplay:
         return state, action, reward, next_state, terminate
 
 
-class PrioritizedExperienceReplayNode:
-    """Node of unsorted binary tree. value of _error field equal to None indices unused node in tree.
-    Only leaf nodes can be unused. """
-    def __init__(self, error, index=None, parent=None, left=None, right=None):
-        self.epsilon = 0.0001
+class TreeNode:
+    """Node of unsorted binary tree. """
+    def __init__(self, value, parent=None, left=None, right=None):
         self.parent = parent
         self.left = left
         self.right = right
-        self._error = error
-        self.index = index
+        self.value = value
 
     @property
     def is_leaf(self):
         return self.left is None and self.right is None
 
     @property
+    def parent_exists(self):
+        return self.parent is not None
+
+    def update_value(self, error):
+        """Updates error value of node and its parents."""
+        self._error = error
+        if self.parent_exists:
+            self.parent.__update_value()
+
+    def __update_value(self):
+        """Update error value base on child nodes."""
+        self._error = self.left.error + self.right.error
+        if self.parent_exists:
+            self.parent.__update_value()
+
+    def proportional_sample(self, value):
+        """Return index of given value. Probability of sampling index is proportional to its error value."""
+        if value > self.error:
+            raise ValueError(f"Value is to high. Sum of tree is {self.error}")
+        return self.__proportional_sample
+
+    def __proportional_sample(self, value):
+        if self.is_leaf:
+            return self.index
+
+        if self.right and value > self.right.error:
+            return self.right.__proportional_sample(value)
+        else:
+            return self.left.__proportional_sample(value-self.left.error)
+
+
+class PrioritizedExperienceReplayNode(TreeNode):
+    """Node of unsorted binary tree. value of _error field equal to None indices unused node in tree.
+    Only leaf nodes can be unused. """
+    def __init__(self, error, index=None, parent=None, left=None, right=None):
+        super().__init__(value=error, parent=parent, left=left, right=right)
+        self.epsilon = 0.0001
+        self.index = index
+
+    @property
     def error(self):
         """Returns modified _error value. Returns _error value modified by epsilon value if its leaf node.
         If _error value is None returns 0. In other cases returns 0"""
-        if self._error is None:
+        if self.value is None:
             return 0
         elif self.is_leaf:
-            return self._error + self.epsilon
+            return self.value + self.epsilon
         else:
-            return self._error
-
-    @property
-    def parent_exists(self):
-        return self.parent is not None
+            return self.value
 
     @classmethod
     def from_list(cls, data):
@@ -169,11 +202,10 @@ class PrioritizedExperienceReplayNode:
             lower_nodes, upper_nodes = upper_nodes, lower_nodes
         return nodes, lower_nodes.pop()
 
-    def update_value(self, error):
-        """Updates error value of node and its parents."""
-        self._error = error
-        if self.parent_exists:
-            self.parent.__update_value()
+    @classmethod
+    def init_n_leafs(cls, n):
+        return cls.from_list([None]*n)
+
 
     def __update_value(self):
         """Update error value base on child nodes."""
