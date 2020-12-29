@@ -203,37 +203,52 @@ class PrioritizedExperienceReplayNode(TreeNode):
         return nodes, lower_nodes.pop()
 
     @classmethod
-    def init_n_leafs(cls, n):
+    def init_tree_with_n_leafs(cls, n):
         return cls.from_list([None]*n)
 
 
-    def __update_value(self):
-        """Update error value base on child nodes."""
-        self._error = self.left.error + self.right.error
-        if self.parent_exists:
-            self.parent.__update_value()
+class PrioritizedRingBuf(RingBuf):
+    def __init__(self, size):
+        # Pro-tip: when implementing a ring buffer, always allocate one extra element,
+        # this way, self.start == self.end always means the buffer is EMPTY, whereas
+        # if you allocate exactly the right number of elements, it could also mean
+        # the buffer is full. This greatly simplifies the rest of the code.
+        self.data, self.root = PrioritizedExperienceReplayNode.init_tree_with_n_leafs(size+1)
+        self.start = 0
+        self.end = 0
 
-    def proportional_sample(self, value):
-        """Return index of given value. Probability of sampling index is proportional to its error value."""
-        if value > self.error:
-            raise ValueError(f"Value is to high. Sum of tree is {self.error}")
-        return self.__proportional_sample
+    def append(self, element):
+        self.data[self.end].value = element
+        self.end = (self.end + 1) % len(self.data)
+        # end == start and yet we just added one element. This means the buffer has one
+        # too many element. Remove the first element by incrementing start.
+        if self.end == self.start:
+            self.start = (self.start + 1) % len(self.data)
 
-    def __proportional_sample(self, value):
-        if self.is_leaf:
-            return self.index
+    def to_list(self):
+        return self[:]
 
-        if self.right and value > self.right.error:
-            return self.right.__proportional_sample(value)
+    def __getitem__(self, idx):
+        if isinstance(idx, slice):
+            return [self[ii].value for ii in range(*idx.indices(len(self)))]
         else:
-            return self.left.__proportional_sample(value-self.left.error)
+            if idx >= 0:
+                return self.data[(self.start + idx) % len(self.data)].value
+            else:
+                if idx < -len(self.data):
+                    raise ValueError("Incorrect index- out of range")
+                return self.data[(self.end - idx + 1) % len(self.data)].value
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i].value
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
     def __init__(self, size, n_state_frames):
         super().__init__(size, n_state_frames)
 
-        self.errors = PrioritizedExperienceReplayNode()
+        self.errors = TreeNode.init_n_leafs(size)
 
     def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
             terminate: bool):
