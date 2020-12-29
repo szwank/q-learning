@@ -108,6 +108,8 @@ class ExperienceReplay:
 
 
 class PrioritizedExperienceReplayNode:
+    """Node of unsorted binary tree. value of _error field equal to None indices unused node in tree.
+    Only leaf nodes can be unused. """
     def __init__(self, error, index=None, parent=None, left=None, right=None):
         self.epsilon = 0.0001
         self.parent = parent
