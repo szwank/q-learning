@@ -251,24 +251,41 @@ class PrioritizedRingBuf(RingBuf):
         return self.root.proportional_sample(value)
 
 
-
 class PrioritizedExperienceReplay(ExperienceReplay):
     def __init__(self, size, n_state_frames):
         super().__init__(size, n_state_frames)
 
-        self.errors = TreeNode.init_n_leafs(size)
+        self.errors = PrioritizedRingBuf(size+1)
 
     def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
-            terminate: bool):
-        # add only new_frame, the rest of them are all already in buffer
-        if len(self.states) == 0:
-            self.states.extend(state)
-        self.states.append(new_frame)
-        self.actions.append(action)
-        self.rewards.append(reward)
-        self.terminate_state.append(terminate)
+            terminate: bool, error: float):
+        super().add(state, action, new_frame, reward, terminate)
+        self.errors.append(error)
 
-        self.errors
+    def sample_batch(self, n):
+        """Returns batch of samples."""
+        states = []
+        actions = []
+        rewards = []
+        next_states = []
+        terminate_state = []
+        # remove -2 because -1 is from counting from 0 and -1 is from counting most
+        # current frame as first one and future frame as +1 frame
+        for i in self.random(n):
+            index = self.errors.sample(i)
+            state, action, reward, next_state, terminate = self.get_sample(index)
+            states.append(state)
+            actions.append(action)
+            next_states.append(next_state)
+            rewards.append(reward)
+            terminate_state.append(terminate)
+
+        return np.swapaxes(states, 1, 3), np.array(actions), np.array(rewards), \
+               np.swapaxes(next_states, 1, 3), np.array(terminate_state)
+
+    def random(self, n):
+        """Returns n random numbers from range <0, self.error.error_sum>."""
+        return np.random.rand(n) * (self.errors.error_sum)
 
 
 
