@@ -127,7 +127,11 @@ class PrioritizedExperienceReplayNode:
         if self._error is None:
             return 0
         else:
-            return self._error
+            return self._error + self.epsilon
+
+    @property
+    def parent_exists(self):
+        return self.parent is not None
 
     @classmethod
     def from_list(cls, data):
@@ -145,7 +149,11 @@ class PrioritizedExperienceReplayNode:
         while len(lower_nodes) != 1:
             while len(lower_nodes):
                 l_node = lower_nodes.pop()
-                r_node = lower_nodes.pop()
+                # if uneven number of nodes in queue
+                if len(lower_nodes):
+                    r_node = lower_nodes.pop()
+                else:
+                    r_node = cls(error=None)
 
                 node = cls(error=l_node.error + r_node.error, left=l_node, right=r_node)
 
@@ -160,11 +168,14 @@ class PrioritizedExperienceReplayNode:
     def update_value(self, error):
         """Updates error value of node and its parents."""
         self._error = error
-        self.parent.__update_value()
+        if self.parent_exists:
+            self.parent.__update_value()
 
     def __update_value(self):
         """Update error value base on child nodes."""
         self._error = self.left.error + self.right.error
+        if self.parent_exists:
+            self.parent.__update_value()
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
