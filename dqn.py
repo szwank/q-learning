@@ -1,3 +1,4 @@
+import copy
 from time import sleep
 import gc
 from typing import List
@@ -13,7 +14,7 @@ from tensorflow.keras import layers, models, optimizers
 from tqdm import tqdm
 
 from preprocessing import to_gryscale, downsample, crop_image
-from queues import RingBuf, ExperienceReplay
+from queues import RingBuf, PrioritizedExperienceReplay
 
 
 class QLearner:
@@ -42,7 +43,7 @@ class QLearner:
         model_input_size = (*screen_size, n_state_frames)
         self.network = self._get_original_model(model_input_size, self.n_actions)
         self.target_network = self._get_original_model(model_input_size, self.n_actions)
-        self.memory = ExperienceReplay(replay_size, n_state_frames)
+        self.memory = PrioritizedExperienceReplay(replay_size, n_state_frames)
         self.preprocess_funcs = preprocess_funcs
         self.state = RingBuf(n_state_frames)
 
@@ -125,9 +126,12 @@ class QLearner:
                     self.plot()
 
     def _init_experience_replay(self):
-        """Fill experience replay memory with states-actions by plying the game."""
-        while len(self.memory) < self.replay_start_size:
-            self._play_game()
+        """Fill partially experience replay memory with states-actions by plying the game."""
+        print("Initialization of experience replay")
+        with tqdm(total=self.replay_start_size) as progress_bar:
+            while len(self.memory) < self.replay_start_size:
+                self._play_game(kind='init')
+                progress_bar.update(len(self.memory) - progress_bar.last_print_n)
 
     def update_target_network(self):
         self.target_network.set_weights(self.network.get_weights())
@@ -147,7 +151,7 @@ class QLearner:
 
         self._update_network()
 
-    def _play_game(self) -> List[int or float]:
+    def _play_game(self, kind: str = 'train') -> List[int or float]:
         """Play one game until termination state. Returns gained rewards per action."""
         self.env.reset()
         self.set_init_state()
@@ -159,7 +163,7 @@ class QLearner:
             new_frame, reward, terminate = self.env_step(action)
             game_rewards.append(reward)
             action_mask = self.encode_action(action)
-            self.update_memory(action_mask, new_frame, reward, terminate)
+            self.update_memory(action_mask, new_frame, reward, terminate, kind)
             # update state
             self.update_state(new_frame)
             self.n_actions_taken += 1
@@ -182,8 +186,19 @@ class QLearner:
         reward = self.clip_reward(reward)
         return new_frame, reward, terminate
 
-    def update_memory(self, action_mask, new_frame, reward, terminate):
-        self.memory.add(self.state.to_list(), action_mask, new_frame, reward, terminate)
+    def update_memory(self, action_mask, new_frame, reward, terminate, kind):
+        if kind == 'init':
+            error = reward
+        else:
+            action = np.array(action_mask, dtype=bool)
+            prediction = self._get_current_state_prediction()[0, action]
+            next_state = copy.deepcopy(self.state)
+            next_state.append(new_frame)
+            next_state_prediction = self._get_prediction(next_state)
+            error = float(abs(prediction - (reward + self.gamma*np.max(next_state_prediction))))
+
+        self.memory.add(self.state.to_list(), action_mask, new_frame, reward, terminate, error)
+
 
     def clip_reward(self, reward):
         return np.sign(reward)
@@ -224,9 +239,15 @@ class QLearner:
 
     def choose_best_action(self) -> int:
         # switch channel axis and add additional dimension(batch size) expected by network
-        state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
-        prediction = self.network.predict_on_batch([state, np.ones((1, self.n_actions))])
+        prediction = self._get_current_state_prediction()
         return int(np.argmax(prediction))
+
+    def _get_prediction(self, state):
+        state = np.expand_dims(np.swapaxes(state.to_list(), 0, 2), 0)
+        return self.network.predict_on_batch([state, np.ones((1, self.n_actions))])
+
+    def _get_current_state_prediction(self):
+        return self._get_prediction(self.state)
 
     def update_state(self, screen):
         self.state.append(screen)
