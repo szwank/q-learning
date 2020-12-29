@@ -217,6 +217,10 @@ class PrioritizedRingBuf(RingBuf):
         self.start = 0
         self.end = 0
 
+    @property
+    def error_sum(self):
+        return self.root.error
+
     def append(self, element):
         self.data[self.end].value = element
         self.end = (self.end + 1) % len(self.data)
@@ -242,6 +246,10 @@ class PrioritizedRingBuf(RingBuf):
     def __iter__(self):
         for i in range(len(self)):
             yield self[i].value
+
+    def sample(self, value):
+        return self.root.proportional_sample(value)
+
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
