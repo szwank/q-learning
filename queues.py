@@ -6,10 +6,6 @@ import numpy as np
 
 class RingBuf:
     def __init__(self, size):
-        # Pro-tip: when implementing a ring buffer, always allocate one extra element,
-        # this way, self.start == self.end always means the buffer is EMPTY, whereas
-        # if you allocate exactly the right number of elements, it could also mean
-        # the buffer is full. This greatly simplifies the rest of the code.
         self.data = [None] * (size + 1)
         self.start = 0
         self.end = 0
@@ -235,10 +231,6 @@ class PrioritizedExperienceReplayNode(TreeNode):
 
 class PrioritizedRingBuf(RingBuf):
     def __init__(self, size):
-        # Pro-tip: when implementing a ring buffer, always allocate one extra element,
-        # this way, self.start == self.end always means the buffer is EMPTY, whereas
-        # if you allocate exactly the right number of elements, it could also mean
-        # the buffer is full. This greatly simplifies the rest of the code.
         self.data, self.root = PrioritizedExperienceReplayNode.init_tree_with_n_leafs(size + 1)
         self.start = 0
         self.end = 0
@@ -250,6 +242,7 @@ class PrioritizedRingBuf(RingBuf):
     def append(self, element):
         self.data[self.end].update_value(element)
         self.end = (self.end + 1) % len(self.data)
+        self.data[self.end].update_value(None)
         # end == start and yet we just added one element. This means the buffer has one
         # too many element. Remove the first element by incrementing start.
         if self.end == self.start:
@@ -271,10 +264,17 @@ class PrioritizedRingBuf(RingBuf):
 
     def __iter__(self):
         for i in range(len(self)):
-            yield self[i].value
+            yield self[i]
 
     def sample(self, value):
-        return self.root.proportional_sample(value)
+        """Return buffer index of passed value from that range."""
+        # index of data list without taking into account buffer shift
+        idx = self.root.proportional_sample(value)
+
+        if idx >= self.start:
+            return idx - self.start
+        else:
+            return len(self) - self.end + idx
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
