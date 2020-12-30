@@ -103,8 +103,7 @@ class QLearner:
 
     def _play_game(self, kind: str = 'train') -> List[int or float]:
         """Play one game until termination state. Returns gained rewards per action."""
-        self.env.reset()
-        self.set_init_state()
+        self.reset_environment()
 
         game_rewards = []
         terminate = False
@@ -123,6 +122,10 @@ class QLearner:
         self.update_memory(game_memory, kind)
 
         return game_rewards
+
+    def reset_environment(self):
+        state = self.env.reset()
+        self.set_init_state(state)
 
     def _update_network(self):
         # Sample and fit
@@ -236,8 +239,7 @@ class QLearner:
         self.network.save('model')
 
     def evaluate(self):
-        self.env.reset()
-        self.set_init_state()
+        self.reset_environment()
 
         terminate = False
         while not terminate:
