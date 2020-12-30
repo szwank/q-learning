@@ -1,15 +1,18 @@
-from time import sleep
 import gc
+from time import sleep
 from typing import List
 
 import gym
 import matplotlib
+from tensorflow.python.keras.models import clone_model
+
+from networks import get_original_model
+
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 import random
 
-from tensorflow.keras import layers, models, optimizers
 from tqdm import tqdm
 
 from preprocessing import to_gryscale, downsample, crop_image
@@ -17,13 +20,12 @@ from queues import RingBuf, PrioritizedExperienceReplay, ExperienceReplay
 
 
 class QLearner:
-    def __init__(self, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
-                 screen_size=(85, 74), n_state_frames=4, batch_size=32, gamma=0.99, lr=0.00025, replay_start_size=50000,
+    def __init__(self, model, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
+                 n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
                  final_exploration_frame=1000000, update_between_n_episodes=4, update_network_period=10000):
         # training parameters
         self.batch_size = batch_size
         self.gamma = gamma
-        self.lr = lr
         self.replay_start_size = replay_start_size
         self.final_exploration_frame = final_exploration_frame
         self.n_state_frames = n_state_frames
@@ -40,63 +42,11 @@ class QLearner:
         # other stuff initialization
         self.env = gym.make(env_name)
         self.n_actions = self.env.action_space.n
-        model_input_size = (*screen_size, n_state_frames)
-        self.network = self._get_original_model(model_input_size, self.n_actions)
-        self.target_network = self._get_original_model(model_input_size, self.n_actions)
+        self.network = model
+        self.target_network = clone_model(model)
         self.memory = PrioritizedExperienceReplay(self.replay_size, n_state_frames)
         self.preprocess_funcs = preprocess_funcs
         self.state = RingBuf(n_state_frames)
-
-    def _get_model(self, input_size, n_actions):
-        """Returns short conv model with mask at the end of the network. Network is interpretation of original network
-        from papers."""
-        screen_input = layers.Input(input_size)
-        actions_input = layers.Input(n_actions)
-        
-        x = layers.Lambda(lambda x: x/255.0)(screen_input)
-
-        x = layers.Conv2D(16, (3, 3), padding='same')(x)
-        x = layers.Conv2D(16, (3, 3), padding='same')(x)
-        x = layers.Conv2D(16, (3, 3), padding='same')(x)
-        x = layers.Conv2D(16, (3, 3), padding='same')(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Conv2D(32, (3, 3), padding='same')(x)
-        x = layers.Conv2D(32, (3, 3), padding='same')(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Flatten()(x)
-        x = layers.Dense(256, activation='relu')(x)
-        x = layers.Dense(n_actions)(x)
-        x = layers.Multiply()([x, actions_input])
-
-        model = models.Model(inputs=[screen_input, actions_input], outputs=x)
-        optimizer = optimizers.RMSprop(lr=self.lr, rho=0.95, epsilon=0.01, momentum=0.95)
-        model.compile(optimizer, loss='mse')
-        return model
-
-    def _get_original_model(self, input_size, n_actions):
-        """Returns short conv model with mask at the end of the network. Copy of network from papers."""
-        screen_input = layers.Input(input_size)
-        actions_input = layers.Input(n_actions)
-
-        x = layers.Lambda(lambda x: x / 255.0)(screen_input)
-
-        x = layers.Conv2D(16, (8, 8), strides=(4, 4))(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Conv2D(32, (4, 4), strides=(2, 2))(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Flatten()(x)
-        x = layers.Dense(256, activation='relu')(x)
-        x = layers.Dense(n_actions)(x)
-        x = layers.Multiply()([x, actions_input])
-
-        model = models.Model(inputs=[screen_input, actions_input], outputs=x)
-        optimizer = optimizers.RMSprop(lr=self.lr, rho=0.95, epsilon=0.01, momentum=0.95)
-        model.compile(optimizer, loss='mse')
-        return model
 
     def train(self, n_frames=1000000, plot=True, iteration=1, verbose=True):
         print('Training Started')
@@ -105,7 +55,7 @@ class QLearner:
 
         self._init_experience_replay()
 
-        update_target_network_after_n_iteration = round(self.update_network_period/self.batch_size)
+        update_target_network_after_n_iteration = round(self.update_network_period / self.batch_size)
 
         with tqdm(total=n_frames) as progress_bar:
 
@@ -202,7 +152,7 @@ class QLearner:
             states = np.array(states)
             prediction = self._get_prediction(states)[action]
             next_state_prediction = self._get_prediction(next_states)
-            errors = np.abs(prediction - (rewards + self.gamma*np.max(next_state_prediction, axis=1)))
+            errors = np.abs(prediction - (rewards + self.gamma * np.max(next_state_prediction, axis=1)))
 
         self.memory.extend(states, actions, next_states[:, :, :, 0], rewards, terminate_state, errors)
 
@@ -210,7 +160,7 @@ class QLearner:
         return np.sign(reward)
 
     def encode_action(self, action: int):
-        action_mask = np.zeros((self.n_actions, ))
+        action_mask = np.zeros((self.n_actions,))
         action_mask[action] = 1
         return action_mask
 
@@ -303,6 +253,10 @@ class QLearner:
 
 
 if __name__ == "__main__":
-    learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=100000, final_exploration_frame=100000)
+    learner = QLearner(model=get_original_model((85, 74, 4), 4, 0.00025),
+                       preprocess_funcs=[to_gryscale, crop_image, downsample],
+                       replay_size=100000,
+                       final_exploration_frame=100000,
+                       replay_start_size=100)
 
     learner.train(plot=False)
