@@ -93,15 +93,15 @@ class QLearner:
     def episode(self):
         """Simulate on episode of training"""
         games_played = 0
-
+        rewards = []
         while games_played < self.n_games_between_update:
             game_rewards = self._play_game(render=False)
 
             games_played += 1
 
-            total_reward = sum(game_rewards)
-            # print(f"Sum of game rewards: {total_reward}")
-            self.rewards.append(total_reward)
+            rewards.append(sum(game_rewards))
+
+        self.rewards.append(sum(rewards)/len(rewards))
 
         self._update_network()
 
