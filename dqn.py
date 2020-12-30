@@ -73,6 +73,7 @@ class QLearner:
 
                 if self.iteration % update_target_network_after_n_iteration == 0:
                     self.update_target_network()
+                    self.save_model()
                 if verbose:
                     self.print_stats()
                 if plot:
