@@ -107,7 +107,7 @@ class ExperienceReplay:
         next_state = self.states[idx + 1:idx + self.n_state_frames + 1]
         terminate = self.terminate_state[idx]
 
-        return np.moveaxis(state, 0, 2), action, reward, np.moveaxis(next_state, 0, 2), terminate
+        return state, action, reward, next_state, terminate
 
     def get_all(self):
         states = []
