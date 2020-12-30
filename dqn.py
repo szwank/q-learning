@@ -262,6 +262,9 @@ class QLearner:
             self.fig, self.ax = plt.subplots(1, 1)
             plt.show(block=False)
             plt.draw()
+            plt.title(f'Average games reward per {self.n_games_between_update} games')
+            plt.xlabel(f'Iteration ({self.n_games_between_update} games, one update)')
+            plt.ylabel('Average reward')
 
             self.points = plt.plot(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
             self.background = self.fig.canvas.copy_from_bbox(self.ax.bbox)
