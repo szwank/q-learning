@@ -72,6 +72,7 @@ class QLearner:
                 progress_bar.update(self.trained_on_n_frames - progress_bar.last_print_n)
 
                 if self.iteration % update_target_network_after_n_iteration == 0:
+                    print("Model switched")
                     self.update_target_network()
                     self.save_model()
                 if verbose:
