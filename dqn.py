@@ -44,15 +44,15 @@ class QLearner:
         # other stuff initialization
         self.env = gym.make(env_name)
         self.n_actions = self.env.action_space.n
-        self.network = model
+        self.online_model = model
+        self.target_model = clone_model(model)
         self.model_input_shape = model.input_shape
         self.model_state_input_shape = self.model_input_shape[0][1:]
-        self.target_network = clone_model(model)
         self.memory = PrioritizedExperienceReplay(self.replay_size, n_state_frames)
         self.preprocess_funcs = preprocess_funcs
         self.state = RingBuf(n_state_frames)
 
-    def train(self, n_frames=1000000, plot=True, iteration=1):
+    def train(self, n_frames=1000000, plot=True, iteration=1, render_period=100):
         print('Training Started')
         self.iteration = iteration
         self.n_actions_taken = 0
@@ -76,10 +76,12 @@ class QLearner:
 
                 if self.iteration % update_target_network_after_n_iteration == 0:
                     print("Model switched")
-                    self.update_target_network()
+                    self.update_target_model_weights()
                     self.save_model()
                 if plot:
                     self.plot()
+                if self.iteration % render_period == 0:
+                    self.evaluate()
 
     def _init_experience_replay(self):
         """Fill partially experience replay memory with states-actions by plying the game."""
@@ -93,7 +95,7 @@ class QLearner:
         games_played = 0
 
         while games_played < self.n_games_between_update:
-            game_rewards = self._play_game()
+            game_rewards = self._play_game(render=False)
 
             games_played += 1
 
@@ -103,7 +105,7 @@ class QLearner:
 
         self._update_network()
 
-    def _play_game(self, kind: str = 'train') -> List[int or float]:
+    def _play_game(self, kind: str = 'train', render=False) -> List[int or float]:
         """Play one game until termination state. Returns gained rewards per action."""
         self.reset_environment()
 
@@ -113,7 +115,7 @@ class QLearner:
         game_memory = ExperienceReplay(self.replay_size, self.n_state_frames)
         while not terminate:
             action = self.choose_action()
-            new_frame, reward, terminate = self.env_step(action)
+            new_frame, reward, terminate = self.env_step(action, render)
             game_rewards.append(reward)
             action_mask = self.encode_action(action)
             game_memory.add(self.state.to_list(), action_mask, new_frame, reward, terminate)
@@ -158,7 +160,7 @@ class QLearner:
         return self._get_prediction(state)
 
     def _get_prediction(self, states):
-        return self.network.predict_on_batch([states, np.ones((len(states), self.n_actions))])
+        return self.online_model.predict_on_batch([states, np.ones((len(states), self.n_actions))])
 
     def env_step(self, action: int):
         """Call env.step and return preprocessed frame of new state."""
@@ -227,8 +229,8 @@ class QLearner:
 
         """
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
-        next_Q_values = self.network.predict([next_states, np.ones(actions.shape)])
-        next_Q_targets = self.target_network.predict([next_states, np.ones(actions.shape)])
+        next_Q_targets = self.online_model.predict([next_states, np.ones(actions.shape)])
+        next_Q_values = self.target_model.predict([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is 0 by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
@@ -236,10 +238,10 @@ class QLearner:
         Q_values = rewards + self.gamma * np.take(next_Q_values, greedy_policy_action)
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
-        self.network.train_on_batch([start_states, actions], actions * Q_values[:, None])
+        self.online_model.train_on_batch([start_states, actions], actions * Q_values[:, None])
 
-    def update_target_network(self):
-        self.target_network.set_weights(self.network.get_weights())
+    def update_target_model_weights(self):
+        self.target_model.set_weights(self.online_model.get_weights())
 
     def get_stats(self):
         return f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, ' \
@@ -260,7 +262,7 @@ class QLearner:
         self.fig.canvas.draw()
 
     def save_model(self):
-        self.network.save('model')
+        self.online_model.save('model')
 
     def evaluate(self):
         self.reset_environment()
