@@ -108,7 +108,7 @@ class QLearner:
         game_rewards = []
         terminate = False
 
-        game_memory = ExperienceReplay(self.replay_size, self.n_actions)
+        game_memory = ExperienceReplay(self.replay_size, self.n_state_frames)
         while not terminate:
             action = self.choose_action()
             new_frame, reward, terminate = self.env_step(action)
