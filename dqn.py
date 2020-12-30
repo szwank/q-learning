@@ -301,7 +301,8 @@ class QLearner:
         print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
               f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
 
-learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=1000 * 300, replay_start_size=100, final_exploration_frame=1)
 
-learner.train(plot=False)
+if __name__ == "__main__":
+    learner = QLearner(preprocess_funcs=[to_gryscale, crop_image, downsample], replay_size=100000, final_exploration_frame=100000)
 
+    learner.train(plot=False)
