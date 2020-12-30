@@ -85,9 +85,6 @@ class QLearner:
                 self._play_game(kind='init')
                 progress_bar.update(len(self.memory) - progress_bar.last_print_n)
 
-    def update_target_network(self):
-        self.target_network.set_weights(self.network.get_weights())
-
     def episode(self):
         """Simulate on episode of training"""
         games_played = 0
@@ -129,20 +126,36 @@ class QLearner:
         state = self.env.reset()
         self.set_init_state(state)
 
-    def _update_network(self):
-        # Sample and fit
-        start_states, actions, rewards, next_states, is_terminal = self.sample_memory()
-        self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
-        self.trained_on_n_frames += self.batch_size
+    def set_init_state(self, state):
+        # flush current state with starting screen
+        for _ in range(self.n_state_frames):
+            self.state.append(state)
 
-    def sample_memory(self):
-        start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(self.batch_size)
-        return np.moveaxis(start_states, 1, len(self.model_state_input_shape)),\
-               actions, rewards, np.moveaxis(next_states, 1, len(self.model_state_input_shape)), is_terminal
+    def choose_action(self):
+        """Choose action agent will take."""
+        epsilon = self.get_epsilon()
 
-    def plot(self):
-        plt.plot(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
-        plt.show(block=False)
+        # Choose the action
+        if random.random() < epsilon:
+            action = self.env.action_space.sample()
+        else:
+            action = self.choose_best_action()
+        return action
+
+    def get_epsilon(self):
+        return max(0.1, 1 - self.trained_on_n_frames / self.final_exploration_frame)
+
+    def choose_best_action(self) -> int:
+        # switch channel axis and add additional dimension(batch size) expected by network
+        prediction = self._get_current_state_prediction()
+        return int(np.argmax(prediction))
+
+    def _get_current_state_prediction(self):
+        state = np.expand_dims(np.moveaxis(self.state.to_list(), 0, len(self.model_state_input_shape)-1), 0)
+        return self._get_prediction(state)
+
+    def _get_prediction(self, states):
+        return self.network.predict_on_batch([states, np.ones((len(states), self.n_actions))])
 
     def env_step(self, action: int):
         """Call env.step and return preprocessed frame of new state."""
@@ -150,6 +163,22 @@ class QLearner:
         new_frame = self.preprocess_image(new_frame)
         reward = self.clip_reward(reward)
         return new_frame, reward, terminate
+
+    def preprocess_image(self, img):
+        for function in self.preprocess_funcs:
+            img = function(img)
+        return img
+
+    def clip_reward(self, reward):
+        return np.sign(reward)
+
+    def encode_action(self, action: int):
+        action_mask = np.zeros((self.n_actions,))
+        action_mask[action] = 1
+        return action_mask
+
+    def update_state(self, screen):
+        self.state.append(screen)
 
     def update_memory(self, temp_memory: ExperienceReplay, kind):
         states, actions, rewards, next_states, terminate_state = self._get_entire_memory(temp_memory)
@@ -171,56 +200,16 @@ class QLearner:
         return np.moveaxis(states, 1, len(self.model_state_input_shape)),\
                actions, rewards, np.moveaxis(next_states, 1, len(self.model_state_input_shape)), terminate_states
 
-    def clip_reward(self, reward):
-        return np.sign(reward)
+    def _update_network(self):
+        # Sample and fit
+        start_states, actions, rewards, next_states, is_terminal = self.sample_memory()
+        self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+        self.trained_on_n_frames += self.batch_size
 
-    def encode_action(self, action: int):
-        action_mask = np.zeros((self.n_actions,))
-        action_mask[action] = 1
-        return action_mask
-
-    def set_init_state(self, state):
-        # flush current state with starting screen
-        for _ in range(self.n_state_frames):
-            self.state.append(state)
-
-    def get_current_screen(self):
-        screen = self.env.render(mode='rgb_array')
-        return self.preprocess_image(screen)
-
-    def preprocess_image(self, img):
-        for function in self.preprocess_funcs:
-            img = function(img)
-        return img
-
-    def choose_action(self):
-        """Choose action agent will take."""
-        epsilon = self.get_epsilon()
-
-        # Choose the action
-        if random.random() < epsilon:
-            action = self.env.action_space.sample()
-        else:
-            action = self.choose_best_action()
-        return action
-
-    def get_epsilon(self):
-        return max(0.1, 1 - self.trained_on_n_frames / self.final_exploration_frame)
-
-    def choose_best_action(self) -> int:
-        # switch channel axis and add additional dimension(batch size) expected by network
-        prediction = self._get_current_state_prediction()
-        return int(np.argmax(prediction))
-
-    def _get_prediction(self, states):
-        return self.network.predict_on_batch([states, np.ones((len(states), self.n_actions))])
-
-    def _get_current_state_prediction(self):
-        state = np.expand_dims(np.moveaxis(self.state.to_list(), 0, len(self.model_state_input_shape)-1), 0)
-        return self._get_prediction(state)
-
-    def update_state(self, screen):
-        self.state.append(screen)
+    def sample_memory(self):
+        start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(self.batch_size)
+        return np.moveaxis(start_states, 1, len(self.model_state_input_shape)),\
+               actions, rewards, np.moveaxis(next_states, 1, len(self.model_state_input_shape)), is_terminal
 
     def fit_batch(self, start_states, actions, rewards, next_states,
                   is_terminal):
@@ -246,6 +235,17 @@ class QLearner:
         # the targets by the actions.
         self.network.train_on_batch([start_states, actions], actions * Q_values[:, None])
 
+    def update_target_network(self):
+        self.target_network.set_weights(self.network.get_weights())
+
+    def print_stats(self):
+        print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
+              f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
+
+    def plot(self):
+        plt.plot(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
+        plt.show(block=False)
+
     def save_model(self):
         self.network.save('model')
 
@@ -259,10 +259,6 @@ class QLearner:
             sleep(0.05)
             new_frame, reward, terminate = self.env_step(action)
             self.update_state(new_frame)
-
-    def print_stats(self):
-        print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
-              f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
 
 
 if __name__ == "__main__":
