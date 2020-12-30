@@ -22,7 +22,8 @@ from queues import RingBuf, PrioritizedExperienceReplay, ExperienceReplay
 class QLearner:
     def __init__(self, model, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
-                 final_exploration_frame=1000000, update_between_n_episodes=4, update_network_period=10000):
+                 final_exploration_frame=1000000, update_between_n_episodes=4, update_network_period=10000,
+                 max_game_length=-1):
         # training parameters
         self.batch_size = batch_size
         self.gamma = gamma
@@ -31,6 +32,7 @@ class QLearner:
         self.n_state_frames = n_state_frames
         self.n_games_between_update = update_between_n_episodes
         self.update_network_period = update_network_period
+        self.max_game_length = max_game_length
 
         # functional
         self.iteration = None
@@ -111,9 +113,10 @@ class QLearner:
 
         game_rewards = []
         terminate = False
+        game_length = 0
 
         game_memory = ExperienceReplay(self.replay_size, self.n_state_frames)
-        while not terminate:
+        while not terminate and not self._terminate_game(game_length):
             action = self.choose_action()
             new_frame, reward, terminate = self.env_step(action, render)
             game_rewards.append(reward)
@@ -135,6 +138,11 @@ class QLearner:
         # flush current state with starting screen
         for _ in range(self.n_state_frames):
             self.state.append(state)
+
+    def _terminate_game(self, game_length: int) -> bool:
+        """Returns false if max_game_length == -1 or game_lenght is less than max_game_length, otherwise returns True."""
+        return self.max_game_length != -1 and not game_length <= self.max_game_length
+
 
     def choose_action(self):
         """Choose action agent will take."""
