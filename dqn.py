@@ -55,12 +55,13 @@ class QLearner:
         self.iteration = iteration
         self.n_actions_taken = 0
 
+        print("Initialization of experience replay")
         self._init_experience_replay()
 
         update_target_network_after_n_iteration = round(self.update_network_period / self.batch_size)
 
         with tqdm(total=n_frames) as progress_bar:
-
+            print("Training started")
             while self.trained_on_n_frames < n_frames:
 
                 self.episode()
@@ -79,7 +80,6 @@ class QLearner:
 
     def _init_experience_replay(self):
         """Fill partially experience replay memory with states-actions by plying the game."""
-        print("Initialization of experience replay")
         with tqdm(total=self.replay_start_size) as progress_bar:
             while len(self.memory) < self.replay_start_size:
                 self._play_game(kind='init')
