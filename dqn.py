@@ -43,6 +43,8 @@ class QLearner:
         self.env = gym.make(env_name)
         self.n_actions = self.env.action_space.n
         self.network = model
+        self.model_input_shape = model.input_shape
+        self.model_state_input_shape = self.model_input_shape[0][1:]
         self.target_network = clone_model(model)
         self.memory = PrioritizedExperienceReplay(self.replay_size, n_state_frames)
         self.preprocess_funcs = preprocess_funcs
@@ -129,9 +131,14 @@ class QLearner:
 
     def _update_network(self):
         # Sample and fit
-        start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(32)
+        start_states, actions, rewards, next_states, is_terminal = self.sample_memory()
         self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
         self.trained_on_n_frames += self.batch_size
+
+    def sample_memory(self):
+        start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(self.batch_size)
+        return np.moveaxis(start_states, 1, len(self.model_state_input_shape)),\
+               actions, rewards, np.moveaxis(next_states, 1, len(self.model_state_input_shape)), is_terminal
 
     def plot(self):
         plt.plot(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
@@ -145,7 +152,7 @@ class QLearner:
         return new_frame, reward, terminate
 
     def update_memory(self, temp_memory: ExperienceReplay, kind):
-        states, actions, rewards, next_states, terminate_state = temp_memory.get_all()
+        states, actions, rewards, next_states, terminate_state = self._get_entire_memory(temp_memory)
         next_states = np.array(next_states)
 
         if kind == 'init':
@@ -157,7 +164,12 @@ class QLearner:
             next_state_prediction = self._get_prediction(next_states)
             errors = np.abs(prediction - (rewards + self.gamma * np.max(next_state_prediction, axis=1)))
 
-        self.memory.extend(states, actions, next_states[:, :, :, 0], rewards, terminate_state, errors)
+        self.memory.extend(states, actions, next_states[..., 0], rewards, terminate_state, errors)
+
+    def _get_entire_memory(self, memory):
+        states, actions, rewards, next_states, terminate_states = memory.get_all()
+        return np.moveaxis(states, 1, len(self.model_state_input_shape)),\
+               actions, rewards, np.moveaxis(next_states, 1, len(self.model_state_input_shape)), terminate_states
 
     def clip_reward(self, reward):
         return np.sign(reward)
@@ -167,11 +179,10 @@ class QLearner:
         action_mask[action] = 1
         return action_mask
 
-    def set_init_state(self):
-        screen = self.get_current_screen()
+    def set_init_state(self, state):
         # flush current state with starting screen
         for _ in range(self.n_state_frames):
-            self.state.append(screen)
+            self.state.append(state)
 
     def get_current_screen(self):
         screen = self.env.render(mode='rgb_array')
@@ -205,7 +216,7 @@ class QLearner:
         return self.network.predict_on_batch([states, np.ones((len(states), self.n_actions))])
 
     def _get_current_state_prediction(self):
-        state = np.expand_dims(np.swapaxes(self.state.to_list(), 0, 2), 0)
+        state = np.expand_dims(np.moveaxis(self.state.to_list(), 0, len(self.model_state_input_shape)-1), 0)
         return self._get_prediction(state)
 
     def update_state(self, screen):
