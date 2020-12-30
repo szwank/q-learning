@@ -162,8 +162,10 @@ class QLearner:
     def _get_prediction(self, states):
         return self.online_model.predict_on_batch([states, np.ones((len(states), self.n_actions))])
 
-    def env_step(self, action: int):
+    def env_step(self, action: int, render=False):
         """Call env.step and return preprocessed frame of new state."""
+        if render is True:
+            self.env.render()
         new_frame, reward, terminate, _ = self.env.step(action)
         new_frame = self.preprocess_image(new_frame)
         reward = self.clip_reward(reward)
