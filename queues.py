@@ -1,7 +1,7 @@
+from collections import deque
 from typing import List
 
 import numpy as np
-from collections import deque
 
 
 class RingBuf:
@@ -90,7 +90,7 @@ class ExperienceReplay:
         terminate_state = []
         # remove -2 because -1 is from counting from 0 and -1 is from counting most
         # current frame as first one and future frame as +1 frame
-        for i in np.random.randint(0, len(self)-1, n):
+        for i in np.random.randint(0, len(self) - 1, n):
             state, action, reward, next_state, terminate = self.get_sample(i)
             states.append(state)
             actions.append(action)
@@ -128,6 +128,7 @@ class ExperienceReplay:
 
 class TreeNode:
     """Node of unsorted binary tree. """
+
     def __init__(self, value, parent=None, left=None, right=None):
         self.parent = parent
         self.left = left
@@ -162,6 +163,7 @@ class TreeNode:
 class PrioritizedExperienceReplayNode(TreeNode):
     """Node of unsorted binary tree. value of _error field equal to None indices unused node in tree.
     Only leaf nodes can be unused. """
+
     def __init__(self, value, index=None, parent=None, left=None, right=None):
         super().__init__(value=value, parent=parent, left=left, right=right)
         self.epsilon = 0.0001
@@ -212,7 +214,7 @@ class PrioritizedExperienceReplayNode(TreeNode):
 
     @classmethod
     def init_tree_with_n_leafs(cls, n):
-        return cls.from_list([None]*n)
+        return cls.from_list([None] * n)
 
     def proportional_sample(self, value):
         """Return index of given value. Probability of sampling index is proportional to its error value."""
@@ -237,7 +239,7 @@ class PrioritizedRingBuf(RingBuf):
         # this way, self.start == self.end always means the buffer is EMPTY, whereas
         # if you allocate exactly the right number of elements, it could also mean
         # the buffer is full. This greatly simplifies the rest of the code.
-        self.data, self.root = PrioritizedExperienceReplayNode.init_tree_with_n_leafs(size+1)
+        self.data, self.root = PrioritizedExperienceReplayNode.init_tree_with_n_leafs(size + 1)
         self.start = 0
         self.end = 0
 
@@ -279,7 +281,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
     def __init__(self, size, n_state_frames):
         super().__init__(size, n_state_frames)
 
-        self.errors = PrioritizedRingBuf(size+1)
+        self.errors = PrioritizedRingBuf(size + 1)
 
     def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
             terminate: bool, error: float):
@@ -312,11 +314,3 @@ class PrioritizedExperienceReplay(ExperienceReplay):
     def random(self, n):
         """Returns n random numbers from range <0, self.error.error_sum>."""
         return np.random.rand(n) * (self.errors.error_sum)
-
-
-
-
-
-
-
-
