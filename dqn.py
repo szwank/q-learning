@@ -52,7 +52,7 @@ class QLearner:
         self.preprocess_funcs = preprocess_funcs
         self.state = RingBuf(n_state_frames)
 
-    def train(self, n_frames=1000000, plot=True, iteration=1, verbose=True):
+    def train(self, n_frames=1000000, plot=True, iteration=1):
         print('Training Started')
         self.iteration = iteration
         self.n_actions_taken = 0
@@ -72,13 +72,12 @@ class QLearner:
                 gc.collect()
 
                 progress_bar.update(self.trained_on_n_frames - progress_bar.last_print_n)
+                progress_bar.set_description_str(self.get_stats())
 
                 if self.iteration % update_target_network_after_n_iteration == 0:
                     print("Model switched")
                     self.update_target_network()
                     self.save_model()
-                if verbose:
-                    self.print_stats()
                 if plot:
                     self.plot()
 
@@ -99,7 +98,7 @@ class QLearner:
             games_played += 1
 
             total_reward = sum(game_rewards)
-            print(f"Sum of game rewards: {total_reward}")
+            # print(f"Sum of game rewards: {total_reward}")
             self.rewards.append(total_reward)
 
         self._update_network()
@@ -242,9 +241,9 @@ class QLearner:
     def update_target_network(self):
         self.target_network.set_weights(self.network.get_weights())
 
-    def print_stats(self):
-        print(f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, '
-              f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}')
+    def get_stats(self):
+        return f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, ' \
+               f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}'
 
     def plot(self):
         if self.fig is None:
