@@ -52,3 +52,19 @@ def get_original_model(input_size, n_actions, lr):
     optimizer = optimizers.RMSprop(lr=lr, rho=0.95, epsilon=0.01, momentum=0.95)
     model.compile(optimizer, loss='mse')
     return model
+
+
+def get_dense_model(input_size, n_actions, lr):
+    state_input = layers.Input(input_size)
+    actions_input = layers.Input(n_actions)
+
+
+    x = layers.Flatten()(state_input)
+    x = layers.Dense(128, activation='relu')(x)
+    x = layers.Dense(n_actions)(x)
+    x = layers.Multiply()([x, actions_input])
+
+    model = models.Model(inputs=[state_input, actions_input], outputs=x)
+    optimizer = optimizers.RMSprop(lr=lr, rho=0.95, epsilon=0.01, momentum=0.95)
+    model.compile(optimizer, loss='mse')
+    return model
