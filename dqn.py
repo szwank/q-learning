@@ -186,9 +186,9 @@ class QLearner:
             self.state.append(state)
 
     def _terminate_game(self, game_length: int) -> bool:
-        """Returns false if max_game_length == -1 or game_lenght is less than max_game_length, otherwise returns True."""
+        """Returns false if max_game_length == -1 or game_lenght is less than max_game_length,
+        otherwise returns True."""
         return self.max_game_length != -1 and not game_length <= self.max_game_length
-
 
     def choose_action(self):
         """Choose action agent will take."""
