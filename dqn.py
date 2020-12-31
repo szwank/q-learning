@@ -16,14 +16,14 @@ import random
 from tqdm import tqdm
 
 from preprocessing import to_gryscale, downsample, crop_image
-from queues import RingBuf, PrioritizedExperienceReplay, ExperienceReplay
+from queues import RingBuf, PrioritizedExperienceReplay
 
 
 class QLearner:
     def __init__(self, model, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
                  final_exploration_frame=1000000, update_between_n_episodes=4, update_network_period=10000,
-                 max_game_length=-1, alfa=2):
+                 max_game_length=-1, alfa=2, initial_memory_error=10):
         """
         Params:
         - model: agent NN model. Model should have two inputs: first one for states (its size
@@ -47,7 +47,10 @@ class QLearner:
         - max_game_length: max number of states before game termination.When game is terminated this
         way last state WILL NOT be set as termination state
         - alfa: parameter used to tell how much more we care about transitions with big errors. When set to 0
-        transitions will be sampled uniformly.
+        transitions will be sampled uniformly
+        - initial_memory_error: value set to prioritized experience replay as initial error value.
+        High value ensures each transitions will be seen at least once, but too high can degrade
+        variety of transitions on model training
 
         """
         # training parameters
@@ -60,6 +63,7 @@ class QLearner:
         self.update_network_period = update_network_period
         self.max_game_length = max_game_length
         self.alfa = alfa
+        self.initial_memory_error = initial_memory_error
 
         # functional
         self.iteration = None
@@ -138,7 +142,7 @@ class QLearner:
         """Fill partially experience replay memory with states-actions by plying the game."""
         with tqdm(total=self.replay_start_size) as progress_bar:
             while len(self.memory) < self.replay_start_size:
-                self._play_game(kind='init')
+                self._play_game()
                 progress_bar.update(len(self.memory) - progress_bar.last_print_n)
 
     def episode(self):
@@ -156,7 +160,7 @@ class QLearner:
 
         self._update_agent()
 
-    def _play_game(self, kind: str = 'train', render=False) -> List[int or float]:
+    def _play_game(self, render=False) -> List[int or float]:
         """Play one game until termination state. Returns gained rewards per action."""
         self.reset_environment()
 
@@ -164,18 +168,15 @@ class QLearner:
         terminate = False
         game_length = 0
 
-        game_memory = ExperienceReplay(self.replay_size, self.n_state_frames)
         while not terminate and not self._terminate_game(game_length):
             action = self.choose_action()
             new_frame, reward, terminate = self.env_step(action, render)
             game_rewards.append(reward)
             action_mask = self.encode_action(action)
-            game_memory.add(self.state.to_list(), action_mask, new_frame, reward, terminate)
+            self.update_memory(action_mask, new_frame, reward, terminate)
             # update state
             self.update_state(new_frame)
             self.n_actions_taken += 1
-
-        self.update_memory(game_memory, kind)
 
         return game_rewards
 
@@ -244,23 +245,10 @@ class QLearner:
     def update_state(self, screen):
         self.state.append(screen)
 
-    def update_memory(self, temp_memory: ExperienceReplay, kind):
-        states, actions, rewards, next_states, terminate_state = self._get_entire_memory(temp_memory)
-        next_states = np.array(next_states)
-
-        if kind == 'init':
-            errors = rewards
-        else:
-            action = np.array(actions, dtype=bool)
-            states = np.array(states)
-            prediction = self._get_prediction(states)[action]
-
-            next_state_value = self.target_model.predict([next_states, np.ones(actions.shape)])
-            next_action = self.online_model.predict([next_states, np.ones(actions.shape)])
-
-            errors = np.abs(prediction - (rewards + self.gamma * np.take(next_state_value, np.argmax(next_action, axis=1))))
-
-        self.memory.extend(np.moveaxis(states, 1, len(self.model_state_input_shape)), actions, next_states[..., 0], rewards, terminate_state, errors**2)
+    def update_memory(self, action_mask, new_frame, reward, terminate):
+        """Add transition to agent memory"""
+        error = self.initial_memory_error
+        self.memory.add(self.state.to_list(), action_mask, new_frame, reward, terminate, error)
 
     def _get_entire_memory(self, memory):
         states, actions, rewards, next_states, terminate_states = memory.get_all()
