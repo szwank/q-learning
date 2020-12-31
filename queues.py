@@ -302,9 +302,11 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         rewards = []
         next_states = []
         terminate_state = []
+        indexes = []
         for value in self.random(n):
             # sample with probability proportional to error value
             index = self.errors.sample(value)
+            indexes.append(index)
             state, action, reward, next_state, terminate = self.get_sample(index)
             states.append(state)
             actions.append(action)
@@ -312,7 +314,8 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             rewards.append(reward)
             terminate_state.append(terminate)
 
-        return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(terminate_state)
+        return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(terminate_state), \
+               indexes
 
     def random(self, n):
         """Returns n random numbers from range <0, self.error.error_sum>."""
