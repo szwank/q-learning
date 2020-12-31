@@ -327,3 +327,10 @@ class PrioritizedExperienceReplay(ExperienceReplay):
     def random(self, n):
         """Returns n random numbers from range <0, self.error.error_sum>."""
         return np.random.rand(n) * (self.errors.error_sum)
+
+    def update_errors(self, indexes, new_errors):
+        """Updates errors of nodes"""
+        for index, error in zip(indexes, new_errors):
+            node = self.errors.get_nodes(index)
+            node.update_value(error)
+
