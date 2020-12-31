@@ -24,6 +24,30 @@ class QLearner:
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
                  final_exploration_frame=1000000, update_between_n_episodes=4, update_network_period=10000,
                  max_game_length=-1):
+        """
+        Params:
+        - model: agent NN model. Model should have two inputs: first one for states (its size
+        depend on preprocess_funcs and its order and value of n_state_frames argument) should be for action
+        mask(binary vector multiplied by output, used for training). last dimension of first input should
+        be equal to n_state_frames. Output of network should be equal to number of possible actions in
+        passed environment
+        - env_name: name of gym environment(https://github.com/openai/gym/wiki/Table-of-environments) on
+        with agent will be trained
+        - preprocess_funcs: list of functions used to preprocess state of environment
+        - replay_size: size of experience replay buffer
+        - n_state_frames: number of states passed at once to network for one forward propagation
+        - batch_size: number of states-actions-rewards passed on network train epoch (minibatch size)
+        - gamma: gamma parameter in Q-Value equation: QValue[s] = reward + gamma * max(QValue[s+1])
+        - replay_start_size: initial size to with experience replay will be filled with random actions
+         before training
+        - final_exploration_frame: last frame number before epsilon will be equal to 0.1
+        - update_between_n_episodes: number of played games after with network will be updated on minibatch
+        - update_network_period: number of frames after with target network will be updated with weights
+        from online model
+        - max_game_length: max number of states before game termination.When game is terminated this
+        way last state WILL NOT be set as termination state
+
+        """
         # training parameters
         self.batch_size = batch_size
         self.gamma = gamma
