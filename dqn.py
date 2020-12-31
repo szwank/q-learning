@@ -23,7 +23,7 @@ class QLearner:
     def __init__(self, model, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
                  final_exploration_frame=1000000, update_between_n_episodes=4, update_network_period=10000,
-                 max_game_length=-1):
+                 max_game_length=-1, alfa=2):
         """
         Params:
         - model: agent NN model. Model should have two inputs: first one for states (its size
@@ -46,6 +46,8 @@ class QLearner:
         from online model
         - max_game_length: max number of states before game termination.When game is terminated this
         way last state WILL NOT be set as termination state
+        - alfa: parameter used to tell how much more we care about transitions with big errors. When set to 0
+        transitions will be sampled uniformly.
 
         """
         # training parameters
@@ -57,6 +59,7 @@ class QLearner:
         self.n_games_between_update = update_between_n_episodes
         self.update_network_period = update_network_period
         self.max_game_length = max_game_length
+        self.alfa = alfa
 
         # functional
         self.iteration = None
@@ -151,7 +154,7 @@ class QLearner:
 
         self.rewards.append(sum(rewards)/len(rewards))
 
-        self._update_network()
+        self._update_agent()
 
     def _play_game(self, kind: str = 'train', render=False) -> List[int or float]:
         """Play one game until termination state. Returns gained rewards per action."""
@@ -264,16 +267,19 @@ class QLearner:
         return np.moveaxis(states, 1, len(self.model_state_input_shape)),\
                actions, rewards, np.moveaxis(next_states, 1, len(self.model_state_input_shape)), terminate_states
 
-    def _update_network(self):
-        # Sample and fit
-        start_states, actions, rewards, next_states, is_terminal = self.sample_memory()
-        self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+    def _update_agent(self):
+        """Makes model fit on one minibatch and update errors of prioritized experience memory."""
+        start_states, actions, rewards, next_states, is_terminal, indexes = self.sample_memory()
+        errors = self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
         self.trained_on_n_frames += self.batch_size
 
+        errors = self.get_memory_error(errors)
+        self.memory.update_errors(indexes, errors)
+
     def sample_memory(self):
-        start_states, actions, rewards, next_states, is_terminal = self.memory.sample_batch(self.batch_size)
+        start_states, actions, rewards, next_states, is_terminal, indexes = self.memory.sample_batch(self.batch_size)
         return np.moveaxis(start_states, 1, len(self.model_state_input_shape)),\
-               actions, rewards, np.moveaxis(next_states, 1, len(self.model_state_input_shape)), is_terminal
+               actions, rewards, np.moveaxis(next_states, 1, len(self.model_state_input_shape)), is_terminal, indexes
 
     def fit_batch(self, start_states, actions, rewards, next_states,
                   is_terminal):
@@ -286,6 +292,7 @@ class QLearner:
         - next_states: numpy array of the resulting states corresponding to the start states and actions
         - is_terminal: numpy boolean array of whether the resulting state is terminal
 
+        Returns Q value errors
         """
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         next_Q_targets = self.online_model.predict([next_states, np.ones(actions.shape)])
@@ -294,10 +301,17 @@ class QLearner:
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
         greedy_policy_action = np.argmax(next_Q_targets, axis=1)
-        Q_values = rewards + self.gamma * np.take(next_Q_values, greedy_policy_action)
+        target_Q_values = rewards + self.gamma * np.take(next_Q_values, greedy_policy_action)
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
-        self.online_model.train_on_batch([start_states, actions], actions * Q_values[:, None])
+        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
+
+        actions = np.array(actions, dtype=bool)
+        online_Q_values = self.online_model.predict([next_states, np.ones(actions.shape)])[actions]
+        return target_Q_values - online_Q_values
+
+    def get_memory_error(self, model_errors):
+        return np.power(np.abs(model_errors), self.alfa)
 
     def update_target_model_weights(self):
         self.target_model.set_weights(self.online_model.get_weights())
