@@ -82,6 +82,8 @@ class QLearner:
         print('Training Started')
         self.iteration = iteration
         self.n_actions_taken = 0
+        fig = None
+        rewards = []
 
         print("Initialization of experience replay")
         self._init_experience_replay()
@@ -107,7 +109,27 @@ class QLearner:
                 if plot:
                     self.plot()
                 if self.iteration % render_period == 0:
-                    self.evaluate()
+                    self.visual_evaluate()
+
+                if self.iteration % 10 == 0:
+                    n = 10
+                    evaluation_score = self.evaluate(n)
+                    rewards.append(sum(evaluation_score)/len(evaluation_score))
+
+                    if fig is None:
+                        fig, ax = plt.subplots(1, 1)
+                        plt.show(block=False)
+                        plt.draw()
+                        plt.title(f'Average games reward per {n} games- evaluation')
+                        plt.xlabel(f'Iteration ({n} games, one update)')
+                        plt.ylabel('Average reward')
+
+                        points = plt.plot(np.arange(1, len(rewards) + 1, 1), rewards)
+
+                    points[0].set_data(np.arange(1, len(rewards) + 1, 1), rewards)
+                    ax.set_xlim(1, len(rewards) + 1)
+                    ax.set_ylim(min(rewards), max(rewards))
+                    fig.canvas.draw()
 
     def _init_experience_replay(self):
         """Fill partially experience replay memory with states-actions by plying the game."""
@@ -303,7 +325,7 @@ class QLearner:
     def save_model(self):
         self.online_model.save('model')
 
-    def evaluate(self):
+    def visual_evaluate(self):
         self.reset_environment()
 
         terminate = False
@@ -313,6 +335,27 @@ class QLearner:
             sleep(0.05)
             new_frame, reward, terminate = self.env_step(action)
             self.update_state(new_frame)
+
+    def evaluate(self, n) -> List:
+        """Evaluate agent across n episodes. Returns list of game scores."""
+        score = []
+
+        for i in range(n):
+            self.reset_environment()
+            terminate = False
+
+            game_score = 0
+            game_length = 0
+
+            while not terminate and not self._terminate_game(game_length):
+                action = self.choose_best_action()
+                new_frame, reward, terminate = self.env_step(action)
+                self.update_state(new_frame)
+                game_score += reward
+                game_length += 1
+
+            score.append(game_score)
+        return score
 
 
 if __name__ == "__main__":
