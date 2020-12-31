@@ -255,15 +255,22 @@ class PrioritizedRingBuf(RingBuf):
         return self[:]
 
     def __getitem__(self, idx):
+        nodes = self.get_nodes(idx)
+        if type(nodes) == list:
+            return [node.value for node in nodes]
+        else:
+            return nodes.value
+
+    def get_nodes(self, idx):
         if isinstance(idx, slice):
-            return [self[ii].value for ii in range(*idx.indices(len(self)))]
+            return [self[ii] for ii in range(*idx.indices(len(self)))]
         else:
             if idx >= 0:
-                return self.data[(self.start + idx) % len(self.data)].value
+                return self.data[(self.start + idx) % len(self.data)]
             else:
                 if idx < -len(self.data):
                     raise ValueError("Incorrect index- out of range")
-                return self.data[(self.end - idx + 1) % len(self.data)].value
+                return self.data[(self.end - idx + 1) % len(self.data)]
 
     def __iter__(self):
         for i in range(len(self)):
