@@ -276,7 +276,7 @@ class PrioritizedRingBuf(RingBuf):
         if idx >= self.start:
             return idx - self.start
         else:
-            return len(self) - self.end + idx
+            return len(self) - 1 - self.end + idx
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
