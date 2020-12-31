@@ -294,7 +294,6 @@ class QLearner:
             plt.ylabel('Average reward')
 
             self.points = plt.plot(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
-            self.background = self.fig.canvas.copy_from_bbox(self.ax.bbox)
 
         self.points[0].set_data(np.arange(1, len(self.rewards) + 1, 1), self.rewards)
         self.ax.set_xlim(1, len(self.rewards) + 1)
