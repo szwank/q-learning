@@ -229,10 +229,13 @@ class QLearner:
             action = np.array(actions, dtype=bool)
             states = np.array(states)
             prediction = self._get_prediction(states)[action]
-            next_state_prediction = self._get_prediction(next_states)
-            errors = np.abs(prediction - (rewards + self.gamma * np.max(next_state_prediction, axis=1)))
 
-        self.memory.extend(states, actions, next_states[..., 0], rewards, terminate_state, errors)
+            next_state_value = self.target_model.predict([next_states, np.ones(actions.shape)])
+            next_action = self.online_model.predict([next_states, np.ones(actions.shape)])
+
+            errors = np.abs(prediction - (rewards + self.gamma * np.take(next_state_value, np.argmax(next_action, axis=1))))
+
+        self.memory.extend(np.moveaxis(states, 1, len(self.model_state_input_shape)), actions, next_states[..., 0], rewards, terminate_state, errors**2)
 
     def _get_entire_memory(self, memory):
         states, actions, rewards, next_states, terminate_states = memory.get_all()
