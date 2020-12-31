@@ -70,6 +70,7 @@ class ExperienceReplay:
         # add only new_frame, the rest of them are all already in buffer
         if len(self.states) == 0:
             self.states.extend(state)
+
         self.states.append(new_frame)
         self.actions.append(action)
         self.rewards.append(reward)
@@ -283,7 +284,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
     def __init__(self, size, n_state_frames):
         super().__init__(size, n_state_frames)
 
-        self.errors = PrioritizedRingBuf(size + 1)
+        self.errors = PrioritizedRingBuf(size)
 
     def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
             terminate: bool, error: float):
