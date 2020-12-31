@@ -30,6 +30,8 @@ class RingBuf:
             return [self[ii] for ii in range(*idx.indices(len(self)))]
         else:
             if idx >= 0:
+                if idx > len(self) - 1:
+                    raise ValueError("Incorrect index- out of range")
                 return self.data[(self.start + idx) % len(self.data)]
             else:
                 if idx < -len(self.data):
