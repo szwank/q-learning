@@ -44,15 +44,15 @@ class LinePlotter:
 
     def update_data(self, new_data: List[int or float] or int or float):
         """Update data with passed data and update y min and max."""
-        if type(new_data) == list:
+        if hasattr(new_data, '__iter__'):
             min_value, max_value = self._find_min_max(new_data)
+            self.data.extend(new_data)
         else:
-            min_value, max_value = new_data
+            min_value = max_value = new_data
+            self.data.append(new_data)
 
         self._update_y_min(min_value)
         self._update_y_max(max_value)
-
-        self.data.extend(new_data)
 
     def _find_min_max(self, new_data):
         min_value = max_value = new_data[0]
