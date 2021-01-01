@@ -25,7 +25,7 @@ class DQNAgent:
     def __init__(self, model, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
                  final_exploration_frame=1000000, min_eps=0.1, max_eps=1, update_between_n_episodes=4,
-                 alfa=2, initial_memory_error=10):
+                 alfa=2, initial_memory_error=10, skipp_n_states=4, actions_between_update=4):
         """
         Params:
         - model: agent NN model. Model should have two inputs: first one for states (its size
@@ -51,6 +51,8 @@ class DQNAgent:
         - initial_memory_error: value set to prioritized experience replay as initial error value.
         High value ensures each transitions will be seen at least once, but too high can degrade
         variety of transitions on model training
+        - skipp_n_states: number of states played between with agent repeats last action on training
+        - actions_between_update: number of actions taken between successive model updates
 
         """
         # training parameters
@@ -64,6 +66,8 @@ class DQNAgent:
         self.initial_memory_error = initial_memory_error
         self.min_eps = min_eps
         self.max_eps = max_eps
+        self.skipp_n_states = skipp_n_states
+        self.actions_between_update = actions_between_update
 
         # functional
         self.iteration = None
@@ -150,16 +154,24 @@ class DQNAgent:
 
         game_score = 0
         terminate = False
+        game_length = 1
 
         while not terminate:
             action = self.choose_action()
-            reward, terminate = self.env_step(action, render)
-            game_score += reward
-            action_mask = self.encode_action(action)
-            self.update_memory(action_mask, reward, terminate)
             self.n_actions_taken += 1
 
-            if update is True:
+            while not terminate:
+                reward, terminate = self.env_step(action, render)
+                game_score += reward
+                action_mask = self.encode_action(action)
+                self.update_memory(action_mask, reward, terminate)
+
+                game_length += 1
+
+                if game_length % self.skipp_n_states == 0:
+                    break
+
+            if update is True and self.n_actions_taken % self.actions_between_update == 0:
                 self._update_agent()
 
         return game_score
@@ -359,9 +371,10 @@ if __name__ == "__main__":
                        batch_size=32,
                        n_state_frames=1,
                        gamma=0.99,
-                       update_network_period=20000,
                        initial_memory_error=1,
-                       update_between_n_episodes=1
+                       update_between_n_episodes=1,
+                       skipp_n_states=1,
+                       actions_between_update=1
                        )
 
     learner.train(n_frames=640000, plot=True, render_period=50)
