@@ -119,8 +119,8 @@ class DQNAgent:
                 progress_bar.update(self.trained_on_n_frames - progress_bar.last_print_n)
                 progress_bar.set_description_str(self.get_stats())
 
-                if self.iteration % save_model_period:
-                    print("Model switched")
+                if self.iteration % save_model_period == 0:
+                    print("Model saved")
                     self.save_model()
 
                 if plot:
@@ -144,7 +144,7 @@ class DQNAgent:
 
     def episode(self):
         """Run one episode of training"""
-        game_score = self._play_game(render=False, update=True)
+        game_score = self._play_game(render=True, update=True)
 
         self.score_plotter.update_data(game_score)
 
