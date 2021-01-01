@@ -31,7 +31,7 @@ class LinePlotter:
         self.fig, self.ax = plt.subplots(1, 1)
         plt.show(block=False)
         plt.draw()
-        plt.title(self.x_title)
+        plt.title(self.title)
         plt.xlabel(self.x_title)
         plt.ylabel(self.y_title)
         self.points = plt.plot(np.arange(1, len(self.data) + 1, 1), self.data)[0]
