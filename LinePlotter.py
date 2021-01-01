@@ -39,7 +39,7 @@ class LinePlotter:
     def _update_figure(self):
         self.points.set_data(np.arange(1, len(self.data) + 1, 1), self.data)
         self.ax.set_xlim(0, len(self.data) + 1)
-        self.ax.set_ylim(self.y_max, self.y_min)
+        self.ax.set_ylim(self.y_min, self.y_max)
         self.fig.canvas.draw()
 
     def update_data(self, new_data: List[int or float] or int or float):
