@@ -32,7 +32,7 @@ class DQNAgent:
         Params:
         - model: agent NN model. Model should have two inputs: first one for states (its size
         depend on preprocess_funcs and its order and value of n_state_frames argument) should be for action
-        mask(binary vector multiplied by output, used for training). last dimension of first input should
+        mask(binary vector multiplied by output, used for training). First dimension of first input should
         be equal to n_state_frames. Output of network should be equal to number of possible actions in
         passed environment
         - env_name: name of gym environment(https://github.com/openai/gym/wiki/Table-of-environments) on
@@ -136,6 +136,7 @@ class DQNAgent:
 
     def train_utilities(self, evaluate_on, evaluation_period, plot, plotter, save_model_period,
                         visual_evaluation_period):
+        """Call train utilities like plotting values"""
         if self.iteration % save_model_period == 0:
             print("Model saved")
             self.save_model()
@@ -369,7 +370,7 @@ class DQNAgent:
 
 
 class DoubleDQNAgent(DQNAgent):
-    def __init__(self, *args, **kwargs):
+    def __init__(self,  *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.target_model = clone_model(self.online_model)
         self.n_model_updates = 0
