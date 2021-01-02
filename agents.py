@@ -217,7 +217,7 @@ class DQNAgent:
         return action
 
     def get_epsilon(self):
-        return max(self.min_eps, self.max_eps - self.trained_on_n_frames / self.final_exploration_frame)
+        return max(self.min_eps, self.max_eps - self.trained_on_n_frames * self.max_eps / self.final_exploration_frame)
 
     def choose_best_action(self) -> int:
         """Choose best action according to current policy."""
