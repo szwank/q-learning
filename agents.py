@@ -161,7 +161,15 @@ class DQNAgent:
         Displays progress bar."""
         with tqdm(total=self.replay_start_size) as progress_bar:
             while len(self.memory) < self.replay_start_size:
-                self._play_game()
+                self.reset_environment()
+                terminate = False
+
+                while not terminate:
+                    action = self.env.action_space.sample()
+                    reward, terminate = self.env_step(action, render=False)
+                    action_mask = self.encode_action(action)
+                    self.update_memory(action_mask, reward, terminate)
+
                 progress_bar.update(len(self.memory) - progress_bar.last_print_n)
 
     def episode(self, render):
