@@ -34,7 +34,7 @@ class LinePlotter:
         plt.title(self.title)
         plt.xlabel(self.x_title)
         plt.ylabel(self.y_title)
-        self.points = plt.plot(np.arange(1, len(self.data) + 1, 1), self.data)[0]
+        self.points = self.ax.plot(np.arange(1, len(self.data) + 1, 1), self.data)[0]
 
     def _update_figure(self):
         self.points.set_data(np.arange(1, len(self.data) + 1, 1), self.data)
