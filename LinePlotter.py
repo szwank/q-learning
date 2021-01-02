@@ -42,7 +42,7 @@ class LinePlotter:
         self.ax.set_ylim(self.y_min, self.y_max)
         self.fig.canvas.draw()
 
-    def update_data(self, new_data: List[int or float] or int or float):
+    def add_data(self, new_data: List[int or float] or int or float):
         """Update data with passed data and update y min and max."""
         if hasattr(new_data, '__iter__'):
             min_value, max_value = self._find_min_max(new_data)
