@@ -78,9 +78,17 @@ class DQNAgent:
         self.fig = None
         self.points = None
         self.score_plotter = LinePlotter(data=[],
-                                         title=f'Average games reward per {self.n_games_between_update} games- training',
-                                         x_title=f'Iteration ({self.n_games_between_update} games, one update)',
-                                         y_title='Average reward')
+                                         title=f'Game score- training (E-greedy policy used)',
+                                         x_title=f'Episode (1 game, many updates)',
+                                         y_title='Game score')
+        self.q_value_plotter = LinePlotter(data=[],
+                                           title=f'Average game Q-Value- training (E-greedy policy used)',
+                                           x_title=f'Episode (1 game, many updates)',
+                                           y_title='Q-Value')
+        self.first_q_value_plotter = LinePlotter(data=[],
+                                           title=f'First state Q-Value- training (E-greedy policy used)',
+                                           x_title=f'Episode (1 game, many updates)',
+                                           y_title='Q-Value')
 
         # other stuff initialization
         self.env = gym.make(env_name)
@@ -119,20 +127,26 @@ class DQNAgent:
                 progress_bar.update(self.trained_on_n_frames - progress_bar.last_print_n)
                 progress_bar.set_description_str(self.get_stats())
 
-                if self.iteration % save_model_period == 0:
-                    print("Model saved")
-                    self.save_model()
+                self.train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
+                                     visual_evaluation_period)
 
-                if plot:
-                    self.score_plotter.plot()
+        print(f"Evaluation score on 100 games: {np.mean(self.evaluate(100))}")
 
-                if self.iteration % render_period == 0:
-                    self.visual_evaluate()
-
-                if self.iteration % evaluation_period == 0:
-                    evaluation_score = self.evaluate(evaluate_on)
-                    plotter.update_data(sum(evaluation_score)/len(evaluation_score))
-                    plotter.plot()
+    def train_utilities(self, evaluate_on, evaluation_period, plot, plotter, save_model_period,
+                        visual_evaluation_period):
+        if self.iteration % save_model_period == 0:
+            print("Model saved")
+            self.save_model()
+        if plot:
+            self.score_plotter.plot()
+            self.q_value_plotter.plot()
+            self.first_q_value_plotter.plot()
+        if self.iteration % visual_evaluation_period == 0:
+            self.visual_evaluate()
+        if self.iteration % evaluation_period == 0:
+            evaluation_score = self.evaluate(evaluate_on)
+            plotter.add_data(sum(evaluation_score) / len(evaluation_score))
+            plotter.plot()
 
     def _init_experience_replay(self):
         """Fill partially experience replay memory with states-actions by plying the game.
@@ -144,9 +158,11 @@ class DQNAgent:
 
     def episode(self):
         """Run one episode of training"""
-        game_score = self._play_game(render=True, update=True)
+        game_score, q_values = self._play_game(render=render, update=True)
 
-        self.score_plotter.update_data(game_score)
+        self.score_plotter.add_data(game_score)
+        self.q_value_plotter.add_data(np.average(q_values))
+        self.first_q_value_plotter.add_data(q_values[0])
 
     def _play_game(self, render=False, update=False) -> int or float:
         """Play one game until termination state. States are added to memory. Returns game score."""
@@ -155,6 +171,7 @@ class DQNAgent:
         game_score = 0
         terminate = False
         game_length = 1
+        Q_values = []
 
         while not terminate:
             action = self.choose_action()
@@ -162,6 +179,7 @@ class DQNAgent:
 
             while not terminate:
                 reward, terminate = self.env_step(action, render)
+                Q_values.append(np.max(self._get_current_state_prediction()))
                 game_score += reward
                 action_mask = self.encode_action(action)
                 self.update_memory(action_mask, reward, terminate)
@@ -174,7 +192,7 @@ class DQNAgent:
             if update is True and self.n_actions_taken % self.actions_between_update == 0:
                 self._update_agent()
 
-        return game_score
+        return game_score, Q_values
 
     def reset_environment(self):
         """Reset gym environment and state field."""
