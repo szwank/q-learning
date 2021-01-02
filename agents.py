@@ -458,6 +458,7 @@ class PrioritizedDQNAgent(DQNAgent):
 
 
 if __name__ == "__main__":
+    pass
     # model = load_model('model')
     # learner = DQNAgent(model=model,
     #                    env_name='CartPole-v1',
@@ -472,20 +473,5 @@ if __name__ == "__main__":
     #                    )
     # # print(np.mean(learner.evaluate(100)))
     # learner.visual_evaluate()
-    learner = DoubleDQNAgent(model=get_dense_model((1, 4), 2, 0.00025),
-                             env_name='CartPole-v1',
-                             replay_size=1000000,
-                             replay_start_size=5000,
-                             final_exploration_frame=400000,
-                             batch_size=16,
-                             n_state_frames=1,
-                             gamma=0.99,
-                             initial_memory_error=1,
-                             update_between_n_episodes=1,
-                             skipp_n_states=1,
-                             actions_between_update=1
-                             )
-
-    learner.train(n_frames=400000, plot=True, visual_evaluation_period=50, render=True)
 
 
