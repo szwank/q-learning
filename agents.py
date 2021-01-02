@@ -91,6 +91,10 @@ class DQNAgent:
                                            title=f'First state Q-Value- training (E-greedy policy used)',
                                            x_title=f'Episode (1 game, many updates)',
                                            y_title='Q-Value')
+        self.error_plotter = LinePlotter(data=[],
+                                           title=f'Average Error- training (E-greedy policy used)',
+                                           x_title=f'Network update',
+                                           y_title='Average Error')
 
         # other stuff initialization
         self.env = environment
@@ -144,6 +148,7 @@ class DQNAgent:
             self.score_plotter.plot()
             self.q_value_plotter.plot()
             self.first_q_value_plotter.plot()
+            self.error_plotter.plot()
         if self.iteration % visual_evaluation_period == 0:
             self.visual_evaluate()
         if self.iteration % evaluation_period == 0:
@@ -179,6 +184,7 @@ class DQNAgent:
         while not terminate:
             action = self.choose_action()
             self.n_actions_taken += 1
+            Q_values.append(np.max(self._get_current_state_prediction()))
 
             while not terminate:
                 reward, terminate = self.env_step(action, render)
@@ -282,7 +288,8 @@ class DQNAgent:
     def _update_agent(self):
         """Makes model fit on one minibatch and update errors of prioritized experience memory."""
         start_states, actions, rewards, next_states, is_terminal = self.sample_batch_from_memory()
-        self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+        errors = self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+        self.error_plotter.add_data(np.average(errors))
         self.trained_on_n_frames += self.batch_size
 
     def sample_batch_from_memory(self):
