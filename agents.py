@@ -370,21 +370,23 @@ class DQNAgent:
 
 
 class DoubleDQNAgent(DQNAgent):
-    def __init__(self,  *args, **kwargs):
+    def __init__(self, transitions_seen_between_updates=10000, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.target_model = clone_model(self.online_model)
         self.n_model_updates = 0
+        self.transitions_seen_between_updates = transitions_seen_between_updates
 
-    def update_online_model_weights(self):
+    def update_target_model_weights(self):
         self.target_model.set_weights(self.online_model.get_weights())
 
     def train_utilities(self, evaluate_on, evaluation_period, plot, plotter, save_model_period,
                         visual_evaluation_period):
+        """Run training utilities. Periodically update target model weights."""
         super().train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
                         visual_evaluation_period)
-
-        if (self.n_model_updates + 1) * 1000 > self.trained_on_n_frames:
-            self.update_online_model_weights()
+        # we want to update target_model weight after transitions_seen_between_updates transitions was seen
+        if (self.n_model_updates + 1) * self.transitions_seen_between_updates > self.trained_on_n_frames:
+            self.update_target_model_weights()
             self.n_model_updates += 1
 
     def fit_batch(self, start_states, actions, rewards, next_states, is_terminal):
