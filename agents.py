@@ -24,7 +24,7 @@ from queues import RingBuf, ExperienceReplay
 
 
 class DQNAgent:
-    def __init__(self, model, env_name='BreakoutDeterministic-v4', preprocess_funcs=[], replay_size=1000000,
+    def __init__(self, model, environment, preprocess_funcs=[], replay_size=1000000,
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
                  final_exploration_frame=1000000, min_eps=0.1, max_eps=1, update_between_n_episodes=4,
                  alfa=2, initial_memory_error=10, skipp_n_states=4, actions_between_update=4):
@@ -93,7 +93,7 @@ class DQNAgent:
                                            y_title='Q-Value')
 
         # other stuff initialization
-        self.env = gym.make(env_name)
+        self.env = environment
         self.n_actions = self.env.action_space.n
         self.online_model = model
         self.model_input_shape = model.input_shape
