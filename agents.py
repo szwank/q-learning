@@ -20,7 +20,7 @@ from tensorflow.python.keras.models import clone_model
 
 from tqdm import tqdm
 
-from queues import RingBuf, ExperienceReplay
+from queues import RingBuf, ExperienceReplay, PrioritizedExperienceReplay
 
 
 class DQNAgent:
@@ -428,6 +428,32 @@ class DoubleDQNAgent(DQNAgent):
         actions = np.array(actions, dtype=bool)
         new_Q_values = self.online_model.predict([start_states, np.ones(actions.shape)])[actions]
         return target_Q_values - new_Q_values
+
+
+class PrioritizedDQNAgent(DQNAgent):
+    def __init__(self, alfa, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        replay_size = kwargs.get('replay_size')
+        self.memory = PrioritizedExperienceReplay(replay_size, self.n_state_frames)
+        self.alfa = alfa
+
+    def _update_agent(self):
+        """Makes model fit on one minibatch and update errors of prioritized experience memory."""
+        start_states, actions, rewards, next_states, is_terminal, indexes = self.sample_batch_from_memory()
+        errors = self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+        self.error_plotter.add_data(np.average(errors))
+        self.trained_on_n_frames += self.batch_size
+
+        errors = self.get_memory_error(errors)
+        self.memory.update_errors(indexes, errors)
+
+    def get_memory_error(self, model_errors):
+        return np.power(np.abs(model_errors), self.alfa)
+
+    def sample_memory(self):
+        start_states, actions, rewards, next_states, is_terminal, indexes = self.memory.sample_batch(self.batch_size)
+        return start_states, actions, rewards, next_states, is_terminal, indexes
+
 
 
 
