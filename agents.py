@@ -108,9 +108,9 @@ class DQNAgent:
         self.iteration = iteration
         self.n_actions_taken = 0
         plotter = LinePlotter(data=[],
-                              title=f'Average games reward in {evaluate_on} games- evaluation',
+                              title=f'Average score in {evaluate_on} games- evaluation',
                               x_title='Evaluation number',
-                              y_title='Average reward')
+                              y_title='Average score')
 
         print("Initialization of experience replay")
         self._init_experience_replay()
