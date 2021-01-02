@@ -186,7 +186,7 @@ class DQNAgent:
 
         game_score = 0
         terminate = False
-        game_length = 1
+        game_length = 0
         Q_values = []
 
         while not terminate:
@@ -196,7 +196,6 @@ class DQNAgent:
 
             while not terminate:
                 reward, terminate = self.env_step(action, render)
-                Q_values.append(np.max(self._get_current_state_prediction()))
                 game_score += reward
                 action_mask = self.encode_action(action)
                 self.update_memory(action_mask, reward, terminate)
