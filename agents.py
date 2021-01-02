@@ -102,8 +102,8 @@ class DQNAgent:
         # Feature state is stored as first element.
         self._state = RingBuf(n_state_frames + 1)
 
-    def train(self, n_frames=1000000, plot=True, iteration=1, render_period=100, evaluate_on=10, evaluation_period=10,
-              save_model_period=10):
+    def train(self, n_frames=1000000, plot=True, iteration=1, visual_evaluation_period=100, evaluate_on=10,
+              evaluation_period=10, save_model_period=10, render=False):
         print('Training Started')
         self.iteration = iteration
         self.n_actions_taken = 0
@@ -119,7 +119,7 @@ class DQNAgent:
             print("Training started")
             while self.trained_on_n_frames < n_frames:
 
-                self.episode()
+                self.episode(render)
                 self.iteration += 1
 
                 gc.collect()
@@ -156,7 +156,7 @@ class DQNAgent:
                 self._play_game()
                 progress_bar.update(len(self.memory) - progress_bar.last_print_n)
 
-    def episode(self):
+    def episode(self, render):
         """Run one episode of training"""
         game_score, q_values = self._play_game(render=render, update=True)
 
@@ -164,7 +164,7 @@ class DQNAgent:
         self.q_value_plotter.add_data(np.average(q_values))
         self.first_q_value_plotter.add_data(q_values[0])
 
-    def _play_game(self, render=False, update=False) -> int or float:
+    def _play_game(self, render=False, update=False) -> (int or float, List[int or float]):
         """Play one game until termination state. States are added to memory. Returns game score."""
         self.reset_environment()
 
