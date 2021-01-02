@@ -1,24 +1,26 @@
 import os
+
 # training it's faster with cpu
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 
+import random
 import gc
 from time import sleep
 from typing import List
 
 import gym
-from tensorflow.python.keras.models import load_model
 from LinePlotter import LinePlotter
 from networks import get_dense_model
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
-import random
+
+from tensorflow.python.keras.models import clone_model
 
 from tqdm import tqdm
 
-from queues import RingBuf, PrioritizedExperienceReplay, ExperienceReplay
+from queues import RingBuf, ExperienceReplay
 
 
 class DQNAgent:
@@ -366,35 +368,81 @@ class DQNAgent:
         return score
 
 
+class DoubleDQNAgent(DQNAgent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.target_model = clone_model(self.online_model)
+        self.n_model_updates = 0
+
+    def update_online_model_weights(self):
+        self.target_model.set_weights(self.online_model.get_weights())
+
+    def train_utilities(self, evaluate_on, evaluation_period, plot, plotter, save_model_period,
+                        visual_evaluation_period):
+        super().train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
+                        visual_evaluation_period)
+
+        if (self.n_model_updates + 1) * 1000 > self.trained_on_n_frames:
+            self.update_online_model_weights()
+            self.n_model_updates += 1
+
+    def fit_batch(self, start_states, actions, rewards, next_states, is_terminal):
+        """Updates model.
+
+        Params:
+        - start_states: numpy array of starting states
+        - actions: numpy array of one-hot encoded actions corresponding to the start states
+        - rewards: numpy array of rewards corresponding to the start states and actions
+        - next_states: numpy array of the resulting states corresponding to the start states and actions
+        - is_terminal: numpy boolean array of whether the resulting state is terminal
+
+        Returns Q value errors
+        """
+        # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+        next_Q_values = self.target_model.predict([next_states, np.ones(actions.shape)])
+        # The Q values of the terminal states is reward by definition, so override them
+        next_Q_values[is_terminal] = 0
+        # The Q values of each start state is the reward + gamma * the max next state Q value
+        target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
+        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
+        # the targets by the actions.
+        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
+
+        actions = np.array(actions, dtype=bool)
+        new_Q_values = self.online_model.predict([start_states, np.ones(actions.shape)])[actions]
+        return target_Q_values - new_Q_values
+
+
+
 if __name__ == "__main__":
     # model = load_model('model')
     # learner = DQNAgent(model=model,
     #                    env_name='CartPole-v1',
-    #                    replay_size=100000,
+    #                    replay_size=25000,
     #                    replay_start_size=10000,
     #                    final_exploration_frame=400000,
     #                    batch_size=32,
     #                    n_state_frames=1,
     #                    gamma=0.99,
-    #                    update_network_period=20000,
     #                    initial_memory_error=1,
     #                    update_between_n_episodes=1
     #                    )
-    # print(learner.evaluate(10))
-    learner = DQNAgent(model=get_dense_model((1, 4), 2, 0.00025),
-                       env_name='CartPole-v1',
-                       replay_size=100000,
-                       replay_start_size=10000,
-                       final_exploration_frame=640000,
-                       batch_size=32,
-                       n_state_frames=1,
-                       gamma=0.99,
-                       initial_memory_error=1,
-                       update_between_n_episodes=1,
-                       skipp_n_states=1,
-                       actions_between_update=1
-                       )
+    # # print(np.mean(learner.evaluate(100)))
+    # learner.visual_evaluate()
+    learner = DoubleDQNAgent(model=get_dense_model((1, 4), 2, 0.00025),
+                             env_name='CartPole-v1',
+                             replay_size=1000000,
+                             replay_start_size=5000,
+                             final_exploration_frame=400000,
+                             batch_size=16,
+                             n_state_frames=1,
+                             gamma=0.99,
+                             initial_memory_error=1,
+                             update_between_n_episodes=1,
+                             skipp_n_states=1,
+                             actions_between_update=1
+                             )
 
-    learner.train(n_frames=640000, plot=True, render_period=50)
+    learner.train(n_frames=400000, plot=True, visual_evaluation_period=50, render=True)
 
 
