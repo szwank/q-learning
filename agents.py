@@ -479,7 +479,7 @@ class PrioritizedDQNAgent(DQNAgent):
         target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
-        samples_weights = np.power(self.memory.get_min_probability / probabilities, 0.5)
+        samples_weights = np.power(self.memory.get_min_probability / probabilities,  0.4)
         self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None],
                                          sample_weight=samples_weights)
 
