@@ -121,8 +121,9 @@ class DQNAgent:
         print("Initialization of experience replay")
         self._init_experience_replay()
 
+        print("Training started")
         with tqdm(total=n_frames) as progress_bar:
-            print("Training started")
+
             while self.trained_on_n_frames < n_frames:
 
                 self.episode(render)
@@ -431,7 +432,7 @@ class DoubleDQNAgent(DQNAgent):
 
 
 class PrioritizedDQNAgent(DQNAgent):
-    def __init__(self, alfa, *args, **kwargs):
+    def __init__(self, alfa=1, *args, **kwargs):
         super().__init__(*args, **kwargs)
         replay_size = kwargs.get('replay_size')
         self.memory = PrioritizedExperienceReplay(replay_size, self.n_state_frames)
@@ -439,8 +440,8 @@ class PrioritizedDQNAgent(DQNAgent):
 
     def _update_agent(self):
         """Makes model fit on one minibatch and update errors of prioritized experience memory."""
-        start_states, actions, rewards, next_states, is_terminal, indexes = self.sample_batch_from_memory()
-        errors = self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
+        start_states, actions, rewards, next_states, is_terminal, indexes, probabilities = self.sample_batch_from_memory()
+        errors = self.fit_batch(start_states, actions, rewards, next_states, is_terminal, probabilities)
         self.error_plotter.add_data(np.average(errors))
         self.trained_on_n_frames += self.batch_size
 
@@ -451,11 +452,40 @@ class PrioritizedDQNAgent(DQNAgent):
         return np.power(np.abs(model_errors), self.alfa)
 
     def sample_memory(self):
-        start_states, actions, rewards, next_states, is_terminal, indexes = self.memory.sample_batch(self.batch_size)
+        start_states, actions, rewards, next_states, is_terminal, indexes, probabilities = self.memory.sample_batch(self.batch_size)
         return start_states, actions, rewards, next_states, is_terminal, indexes
 
+    def update_memory(self, action_mask, reward, terminate):
+        """Add transition to agent memory"""
+        self.memory.add(self.current_state, action_mask, self.feature_state, reward, terminate, 100)
 
+    def fit_batch(self, start_states, actions, rewards, next_states, is_terminal, probabilities):
+        """Updates model.
 
+        Params:
+        - start_states: numpy array of starting states
+        - actions: numpy array of one-hot encoded actions corresponding to the start states
+        - rewards: numpy array of rewards corresponding to the start states and actions
+        - next_states: numpy array of the resulting states corresponding to the start states and actions
+        - is_terminal: numpy boolean array of whether the resulting state is terminal
+
+        Returns Q value errors
+        """
+        # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+        next_Q_values = self.online_model.predict([next_states, np.ones(actions.shape)])
+        # The Q values of the terminal states is reward by definition, so override them
+        next_Q_values[is_terminal] = 0
+        # The Q values of each start state is the reward + gamma * the max next state Q value
+        target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
+        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
+        # the targets by the actions.
+        samples_weights = np.power(self.memory.get_min_probability / probabilities, 0.5)
+        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None],
+                                         sample_weight=samples_weights)
+
+        actions = np.array(actions, dtype=bool)
+        new_Q_values = self.online_model.predict([start_states, np.ones(actions.shape)])[actions]
+        return target_Q_values - new_Q_values
 
 if __name__ == "__main__":
     pass

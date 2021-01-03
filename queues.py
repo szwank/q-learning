@@ -52,12 +52,13 @@ class RingBuf:
 class ExperienceReplay:
     def __init__(self, size, n_state_frames):
         """n_state_frames determines how much frames in state."""
-        # States are saved as separete frames. Each state consists of n_state_frames.
+        # States are saved as separate frames. Each state consists of n_state_frames.
         self.n_state_frames = n_state_frames
 
         # Buffer for states needs to be bigger. We store there n_state_frames
         # per state and extra frame as future state
-        self.states = RingBuf(size + n_state_frames)
+        self.states = RingBuf(size)
+        self.new_states = RingBuf(size)
         self.actions = RingBuf(size)
         self.rewards = RingBuf(size)
         self.terminate_state = RingBuf(size)
@@ -65,14 +66,12 @@ class ExperienceReplay:
     def __len__(self):
         return len(self.actions)
 
-    def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
+    def add(self, state: List[np.array], action: np.array, new_state: List[np.array], reward: int,
             terminate: bool):
         # add only new_frame, the rest of them are all already in buffer
-        if len(self.states) == 0:
-            self.states.extend(state)
-
-        self.states.append(new_frame)
+        self.states.append(state)
         self.actions.append(action)
+        self.new_states.append(new_state)
         self.rewards.append(reward)
         self.terminate_state.append(terminate)
 
@@ -81,14 +80,13 @@ class ExperienceReplay:
             self.add(s, a, nf, r, t)
 
     def sample_batch(self, n):
-        """Returns batch of samples."""
+        """Returns n samples as np arrays."""
         states = []
         actions = []
         rewards = []
         next_states = []
         terminate_state = []
-        # remove -2 because -1 is from counting from 0 and -1 is from counting most
-        # current frame as first one and future frame as +1 frame
+        # We are counting from 0
         for i in np.random.randint(0, len(self) - 1, n):
             state, action, reward, next_state, terminate = self.get_sample(i)
             states.append(state)
@@ -100,10 +98,10 @@ class ExperienceReplay:
         return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(terminate_state)
 
     def get_sample(self, idx):
-        state = self.states[idx:idx + self.n_state_frames]
+        state = self.states[idx]
         action = self.actions[idx]
         reward = self.rewards[idx]
-        next_state = self.states[idx + 1:idx + self.n_state_frames + 1]
+        next_state = self.new_states[idx]
         terminate = self.terminate_state[idx]
 
         return state, action, reward, next_state, terminate
@@ -255,13 +253,13 @@ class PrioritizedRingBuf(RingBuf):
         return self[:]
 
     def __getitem__(self, idx):
-        nodes = self.get_nodes(idx)
+        nodes = self.get_leaf(idx)
         if type(nodes) == list:
             return [node.value for node in nodes]
         else:
             return nodes.value
 
-    def get_nodes(self, idx):
+    def get_leaf(self, idx):
         if isinstance(idx, slice):
             return [self[ii] for ii in range(*idx.indices(len(self)))]
         else:
@@ -286,12 +284,20 @@ class PrioritizedRingBuf(RingBuf):
         else:
             return len(self) - 1 - self.end + idx
 
+    def get_sample_probability(self, index):
+        leaf = self.get_leaf(index)
+        return leaf.value / self.error_sum
+
 
 class PrioritizedExperienceReplay(ExperienceReplay):
     def __init__(self, size, n_state_frames):
         super().__init__(size, n_state_frames)
 
         self.errors = PrioritizedRingBuf(size)
+
+    @property
+    def get_min_probability(self):
+        return self.errors.root.epsilon / self.errors.error_sum
 
     def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
             terminate: bool, error: float):
@@ -310,6 +316,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         next_states = []
         terminate_state = []
         indexes = []
+        probabilities = []
         for value in self.random(n):
             # sample with probability proportional to error value
             index = self.errors.sample(value)
@@ -320,9 +327,19 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             next_states.append(next_state)
             rewards.append(reward)
             terminate_state.append(terminate)
+            probabilities.append(self.errors.get_sample_probability(index))
 
         return np.array(states), np.array(actions), np.array(rewards), np.array(next_states), np.array(terminate_state), \
-               indexes
+               indexes, np.array(probabilities)
+
+    def get_sample(self, idx):
+        state = self.states[idx]
+        action = self.actions[idx]
+        reward = self.rewards[idx]
+        next_state = self.new_states[idx]
+        terminate = self.terminate_state[idx]
+
+        return state, action, reward, next_state, terminate
 
     def random(self, n):
         """Returns n random numbers from range <0, self.error.error_sum>."""
@@ -331,6 +348,5 @@ class PrioritizedExperienceReplay(ExperienceReplay):
     def update_errors(self, indexes, new_errors):
         """Updates errors of nodes"""
         for index, error in zip(indexes, new_errors):
-            node = self.errors.get_nodes(index)
+            node = self.errors.get_leaf(index)
             node.update_value(error)
-
