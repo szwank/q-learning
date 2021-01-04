@@ -359,16 +359,25 @@ class DQNAgent:
 
         Returns Q value errors
         """
+        target_Q_values = self._get_target_Q_values(next_states, actions, rewards, is_terminal)
+        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
+        # the targets by the actions.
+        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
+
+        return self._get_Q_values_errors(start_states, actions, target_Q_values)
+
+    def _get_target_Q_values(self, next_states, actions, rewards, is_terminal):
+        """Predicts target Q-Values"""
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         next_Q_values = self.online_model.predict_on_batch([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is reward by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
         target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
-        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
+        return target_Q_values
 
+    def _get_Q_values_errors(self, start_states, actions, target_Q_values):
+        """Calculate difference error between target Q-Values and current policy Q-Values"""
         actions = np.array(actions, dtype=bool)
         new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
         return target_Q_values - new_Q_values
