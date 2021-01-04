@@ -360,7 +360,7 @@ class DQNAgent:
         Returns Q value errors
         """
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
-        next_Q_values = self.online_model.predict([next_states, np.ones(actions.shape)])
+        next_Q_values = self.online_model.predict_on_batch([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is reward by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
@@ -370,7 +370,7 @@ class DQNAgent:
         self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
 
         actions = np.array(actions, dtype=bool)
-        new_Q_values = self.online_model.predict([start_states, np.ones(actions.shape)])[actions]
+        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
         return target_Q_values - new_Q_values
 
     def get_stats(self):
@@ -460,7 +460,7 @@ class DoubleDQNAgent(DQNAgent):
         Returns Q value errors
         """
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
-        next_Q_values = self.target_model.predict([next_states, np.ones(actions.shape)])
+        next_Q_values = self.target_model.predict_on_batch([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is reward by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
@@ -470,7 +470,7 @@ class DoubleDQNAgent(DQNAgent):
         self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
 
         actions = np.array(actions, dtype=bool)
-        new_Q_values = self.online_model.predict([start_states, np.ones(actions.shape)])[actions]
+        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
         return target_Q_values - new_Q_values
 
 
