@@ -3,15 +3,12 @@ import os
 # Training it's faster with cpu. That's caused by nature of solved problem,
 # we have to make many prediction with only one sample in batch.
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"
-import tensorflow as tf
+
 import random
 import gc
 from time import sleep
 from typing import List
 
-import gym
-from LinePlotter import LinePlotter
-from networks import get_dense_model
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -21,6 +18,7 @@ from tensorflow.python.keras.models import clone_model
 
 from tqdm import tqdm
 
+from LinePlotter import LinePlotter
 from queues import RingBuf, ExperienceReplay, PrioritizedExperienceReplay
 
 
@@ -111,7 +109,34 @@ class DQNAgent:
 
     def train(self, n_frames=1000000, plot=True, iteration=1, visual_evaluation_period=100, evaluate_on=10,
               evaluation_period=10, save_model_period=10, render=False):
-        """CAUTHION: render option may take a lot of computing power thus significantly extending training time."""
+        """
+        Trains agent.
+
+        Params:
+        - n_frames: number of transitions on with agent is trained on.
+        - plot: bool telling whether graphs should be displayed. There are implemented graphs for:
+            * average score in training episodes(games) agent is trained on per batch
+            * average evaluation score per batch
+            * first state and average Q-Value of best action per episode(game)
+            * Average Q-Value error after batch update per batch. Error is calculated on transitions
+            sampled for current batch.
+        - iteration number to starts on. Some utilities use this value to determine whatever to call
+        function after training episode. Leave untouched if you don't need to change it and know what
+        are you doing
+        - visual_evaluation_period: number of epochs after with run game for visual evaluation.
+        Agent isn't trained on this episode and gained score isn't added to average evaluation
+        score plot is used. This is purely for visual evaluation.
+        - evaluate_on: number of games on with agent is evaluated on. Score gained in this evaluations
+        is used to plot graph.
+        - evaluation_period: period in number of episodes after with model is evaluated. Score gained
+        in this evaluations is used to plot graph. This determines density of points in average
+        evaluation score plot
+        - save_model_period: period in number of episodes after with online model is saved.
+        - render: boolean, whatever to render games on with agent is trained. CAUTHION: render option
+        may take a lot of computing power, thus significantly extending training time, but it's
+        environment dependent.
+
+        """
         print('Training Started')
         self.iteration = iteration
         self.n_actions_taken = 0
@@ -139,7 +164,7 @@ class DQNAgent:
                 self.train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
                                      visual_evaluation_period)
 
-        # print(f"Evaluation score on 100 games: {np.mean(self.evaluate(100))}")
+        print(f"Evaluation score on 100 games: {np.mean(self.evaluate(100))}")
 
     def train_utilities(self, evaluate_on, evaluation_period, plot, plotter, save_model_period,
                         visual_evaluation_period):
@@ -198,7 +223,6 @@ class DQNAgent:
         while not terminate:
             action = self.choose_action()
             self.n_actions_taken += 1
-            # with tf.device('/cpu:0'):
             Q_values.append(np.max(self._get_current_state_prediction()))
 
             while not terminate:
@@ -244,7 +268,6 @@ class DQNAgent:
 
     def choose_best_action(self) -> int:
         """Choose best action according to current policy."""
-        # with tf.device('/cpu:0'):
         prediction = self._get_current_state_prediction()
         return int(np.argmax(prediction))
 
@@ -303,7 +326,6 @@ class DQNAgent:
     def _update_agent(self):
         """Makes model fit on one minibatch and update errors of prioritized experience memory."""
         start_states, actions, rewards, next_states, is_terminal = self.sample_batch_from_memory()
-        # with tf.device('/gpu:0'):
         errors = self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
         self.error_plotter.add_data(np.average(errors))
         self.trained_on_n_frames += self.batch_size
