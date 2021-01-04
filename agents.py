@@ -138,7 +138,7 @@ class DQNAgent:
                 self.train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
                                      visual_evaluation_period)
 
-        # print(f"Evaluation score on 100 games: {np.mean(self.evaluate(100))}")
+        print(f"Evaluation score on 100 games: {np.mean(self.evaluate(100))}")
 
     def train_utilities(self, evaluate_on, evaluation_period, plot, plotter, save_model_period,
                         visual_evaluation_period):
@@ -391,12 +391,14 @@ class DQNAgent:
         return score
 
 
-class DoubleDQNAgent(DQNAgent):
+class FullDQNAgent(DQNAgent):
     def __init__(self, transitions_seen_between_updates=10000, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.target_model = clone_model(self.online_model)
         self.n_model_updates = 0
         self.transitions_seen_between_updates = transitions_seen_between_updates
+
+        self.debug_plot = LinePlotter(data=[], title='Returned model loss', x_title='Batch number')
 
     def update_target_model_weights(self):
         self.target_model.set_weights(self.online_model.get_weights())
@@ -407,7 +409,7 @@ class DoubleDQNAgent(DQNAgent):
         super().train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
                         visual_evaluation_period)
         # we want to update target_model weight after transitions_seen_between_updates transitions was seen
-        if (self.n_model_updates + 1) * self.transitions_seen_between_updates > self.trained_on_n_frames:
+        if (self.n_model_updates + 1) * self.transitions_seen_between_updates < self.trained_on_n_frames:
             self.update_target_model_weights()
             self.n_model_updates += 1
 
@@ -429,6 +431,43 @@ class DoubleDQNAgent(DQNAgent):
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
         target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
+        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
+        # the targets by the actions.
+        model_loss = self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
+        self.debug_plot.add_data(model_loss)
+
+        actions = np.array(actions, dtype=bool)
+        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
+        return target_Q_values - new_Q_values
+
+    def _plot(self):
+        super()._plot()
+        self.debug_plot.plot()
+
+
+class DoubleDQNAgent(FullDQNAgent):
+    def fit_batch(self, start_states, actions, rewards, next_states, is_terminal):
+        """Updates model.
+
+        Params:
+        - start_states: numpy array of starting states
+        - actions: numpy array of one-hot encoded actions corresponding to the start states
+        - rewards: numpy array of rewards corresponding to the start states and actions
+        - next_states: numpy array of the resulting states corresponding to the start states and actions
+        - is_terminal: numpy boolean array of whether the resulting state is terminal
+
+        Returns Q value errors
+        """
+        # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+        next_Q_values = self.target_model.predict_on_batch([next_states, np.ones(actions.shape)])
+        # Take with action would be taken from online model.
+        next_Q_actions = self.online_model.predict_on_batch([next_states, np.ones(actions.shape)])
+        next_Q_actions = np.argmax(next_Q_actions, axis=-1)
+
+        # The Q values of the terminal states is reward by definition, so override them
+        next_Q_values[is_terminal] = 0
+        # The Q values of each start state is the reward + gamma * the max next state Q value
+        target_Q_values = rewards + self.gamma * next_Q_values[:, next_Q_actions][:, 0]
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
         self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
@@ -572,9 +611,8 @@ class AIODQNAgent(DQNAgent):
         return target_Q_values - new_Q_values
 
     def _plot(self):
-        super(PrioritizedDQNAgent, self)._plot()
+        super(AIODQNAgent, self)._plot()
         self.plot_samples_weights.plot()
-
 
     def update_target_model_weights(self):
         self.target_model.set_weights(self.online_model.get_weights())
@@ -585,7 +623,7 @@ class AIODQNAgent(DQNAgent):
         super().train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
                         visual_evaluation_period)
         # we want to update target_model weight after transitions_seen_between_updates transitions was seen
-        if (self.n_model_updates + 1) * self.transitions_seen_between_updates > self.trained_on_n_frames:
+        if (self.n_model_updates + 1) * self.transitions_seen_between_updates < self.trained_on_n_frames:
             self.update_target_model_weights()
             self.n_model_updates += 1
 
