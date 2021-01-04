@@ -173,16 +173,19 @@ class DQNAgent:
             print("Model saved")
             self.save_model()
         if plot:
-            self.score_plotter.plot()
-            self.q_value_plotter.plot()
-            self.first_q_value_plotter.plot()
-            self.error_plotter.plot()
+            self._plot()
         if self.iteration % visual_evaluation_period == 0:
             self.visual_evaluate()
         if self.iteration % evaluation_period == 0:
             evaluation_score = self.evaluate(evaluate_on)
             plotter.add_data(sum(evaluation_score) / len(evaluation_score))
             plotter.plot()
+
+    def _plot(self):
+        self.score_plotter.plot()
+        self.q_value_plotter.plot()
+        self.first_q_value_plotter.plot()
+        self.error_plotter.plot()
 
     def _init_experience_replay(self):
         """Fill partially experience replay memory with states-actions by plying the game.
