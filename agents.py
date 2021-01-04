@@ -228,12 +228,12 @@ class DQNAgent:
         Q_values = []
 
         # we are counting game length from 0 thus +1
-        while not terminate and game_length <= self._game_length_exceeded(game_length + 1):
+        while not terminate and not self._game_length_exceeded(game_length + 1):
             action = self.choose_action()
             self.n_actions_taken += 1
             Q_values.append(np.max(self._get_current_state_prediction()))
 
-            while not terminate and game_length <= self._game_length_exceeded(game_length + 1):
+            while not terminate and not self._game_length_exceeded(game_length + 1):
                 reward, terminate = self.env_step(action, render)
                 game_score += reward
                 action_mask = self.encode_action(action)
