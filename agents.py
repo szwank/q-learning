@@ -1,6 +1,7 @@
 import os
 
-# training it's faster with cpu
+# Training it's faster with cpu. That's caused by nature of solved problem,
+# we have to make many prediction with only one sample in batch.
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 import tensorflow as tf
 import random
