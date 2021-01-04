@@ -427,7 +427,7 @@ class DQNAgent:
         return score
 
 
-class DoubleDQNAgent(DQNAgent):
+class FullDQNAgent(DQNAgent):
     def __init__(self, transitions_seen_between_updates=10000, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.target_model = clone_model(self.online_model)
