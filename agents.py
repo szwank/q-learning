@@ -386,22 +386,6 @@ class DQNAgent:
         return f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, ' \
                f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}'
 
-    def plot(self):
-        if self.fig is None:
-            self.fig, self.ax = plt.subplots(1, 1)
-            plt.show(block=False)
-            plt.draw()
-            plt.title(f'Average games reward per {self.n_games_between_update} games')
-            plt.xlabel(f'Iteration ({self.n_games_between_update} games, one update)')
-            plt.ylabel('Average reward')
-
-            self.points = plt.plot(np.arange(1, len(self.games_scores) + 1, 1), self.games_scores)
-
-        self.points[0].set_data(np.arange(1, len(self.games_scores) + 1, 1), self.games_scores)
-        self.ax.set_xlim(1, len(self.games_scores) + 1)
-        self.ax.set_ylim(min(self.games_scores), max(self.games_scores))
-        self.fig.canvas.draw()
-
     def save_model(self):
         self.online_model.save('model')
 
