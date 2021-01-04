@@ -443,7 +443,7 @@ class FullDQNAgent(DQNAgent):
         super().train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
                         visual_evaluation_period)
         # we want to update target_model weight after transitions_seen_between_updates transitions was seen
-        if (self.n_model_updates + 1) * self.transitions_seen_between_updates > self.trained_on_n_frames:
+        if (self.n_model_updates + 1) * self.transitions_seen_between_updates < self.trained_on_n_frames:
             self.update_target_model_weights()
             self.n_model_updates += 1
 
