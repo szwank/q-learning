@@ -26,7 +26,7 @@ class DQNAgent:
     def __init__(self, model, environment, preprocess_funcs=[], replay_size=1000000,
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
                  final_exploration_frame=1000000, min_eps=0.1, max_eps=1, update_between_n_episodes=4,
-                 alfa=2, initial_memory_error=10, skipp_n_states=4, actions_between_update=4):
+                 alfa=2, initial_memory_error=10, skipp_n_states=4, actions_between_update=4, episode_max_length=-1):
         """
         Params:
         - model: agent NN model. Model should have two inputs: first one for states (its size
@@ -54,9 +54,13 @@ class DQNAgent:
         variety of transitions on model training
         - skipp_n_states: number of states played between with agent repeats last action on training
         - actions_between_update: number of actions taken between successive model updates
-
+        - episode_max_length: max length of training episode. It doesn't apply to evaluation episodes.
+        If environment max length is shorter it will dominate over episode_max_length. If you set episode_max_length
+        to be equal to enviroment._max_episode_steps - 2 it can be used as partial-bootstrapping of termination state
+        (https://arxiv.org/abs/1712.00378).
         """
         # training parameters
+        self.episode_max_length = episode_max_length
         self.batch_size = batch_size
         self.gamma = gamma
         self.replay_start_size = replay_start_size
@@ -106,6 +110,9 @@ class DQNAgent:
         # We want to store additional game state as feature game state.
         # Feature state is stored as first element.
         self._state = RingBuf(n_state_frames + 1)
+
+        # constants
+        self.EPISODE_UNLIMITED = -1
 
     def train(self, n_frames=1000000, plot=True, iteration=1, visual_evaluation_period=100, evaluate_on=10,
               evaluation_period=10, save_model_period=10, render=False):
@@ -220,12 +227,13 @@ class DQNAgent:
         game_length = 0
         Q_values = []
 
-        while not terminate:
+        # we are counting game length from 0 thus +1
+        while not terminate and game_length <= self._game_length_exceeded(game_length + 1):
             action = self.choose_action()
             self.n_actions_taken += 1
             Q_values.append(np.max(self._get_current_state_prediction()))
 
-            while not terminate:
+            while not terminate and game_length <= self._game_length_exceeded(game_length + 1):
                 reward, terminate = self.env_step(action, render)
                 game_score += reward
                 action_mask = self.encode_action(action)
@@ -240,6 +248,11 @@ class DQNAgent:
                 self._update_agent()
 
         return game_score, Q_values
+
+    def _game_length_exceeded(self, game_length):
+        """Checks if internal max game length is not exceeded. If episode_max_length is
+        equal to -1 game length is unlimited."""
+        return self.episode_max_length != self.EPISODE_UNLIMITED and game_length <= self.episode_max_length
 
     def reset_environment(self):
         """Reset gym environment and state field."""
