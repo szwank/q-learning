@@ -1,6 +1,6 @@
 import gym
 
-from agents import PrioritizedDQNAgent, DQNAgent
+from agents import PrioritizedDQNAgent,
 from networks import get_dense_model
 
 environment = gym.make('MountainCar-v0')
@@ -14,7 +14,7 @@ environment._max_episode_steps = 1000
 def normalise_state(state):
     return (state - environment.observation_space.low) / (environment.observation_space.high - environment.observation_space.low)
 
-learner = PrioritizedDQNAgent(model=get_dense_model((1, 2), 3, 0.00025),
+learner = PrioritizedDQNAgent(model=get_dense_model((1, 2), 3, 0.00025/4),
                               preprocess_funcs=[normalise_state],
                               environment=environment,
                               replay_size=100000,
@@ -28,7 +28,6 @@ learner = PrioritizedDQNAgent(model=get_dense_model((1, 2), 3, 0.00025),
                               skipp_n_states=4,
                               actions_between_update=1,
                               alfa=0.6
-                              # transitions_seen_between_updates=1000
                               )
 
-learner.train(n_frames=1000000, plot=True, visual_evaluation_period=100000, render=False, evaluate_on=1)
+learner.train(n_frames=1000000, plot=True, visual_evaluation_period=100000, render=False, evaluate_on=5)

@@ -1,16 +1,14 @@
 import os
 
-# training it's faster with cpu
+# Training it's faster with cpu. That's caused by nature of solved problem,
+# we have to make many prediction with only one sample in batch.
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"
-import tensorflow as tf
+
 import random
 import gc
 from time import sleep
 from typing import List
 
-import gym
-from LinePlotter import LinePlotter
-from networks import get_dense_model
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -20,6 +18,7 @@ from tensorflow.python.keras.models import clone_model
 
 from tqdm import tqdm
 
+from LinePlotter import LinePlotter
 from queues import RingBuf, ExperienceReplay, PrioritizedExperienceReplay
 
 
@@ -27,7 +26,7 @@ class DQNAgent:
     def __init__(self, model, environment, preprocess_funcs=[], replay_size=1000000,
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
                  final_exploration_frame=1000000, min_eps=0.1, max_eps=1, update_between_n_episodes=4,
-                 alfa=2, initial_memory_error=10, skipp_n_states=4, actions_between_update=4):
+                 alfa=2, initial_memory_error=10, skipp_n_states=4, actions_between_update=4, episode_max_length=-1):
         """
         Params:
         - model: agent NN model. Model should have two inputs: first one for states (its size
@@ -55,9 +54,13 @@ class DQNAgent:
         variety of transitions on model training
         - skipp_n_states: number of states played between with agent repeats last action on training
         - actions_between_update: number of actions taken between successive model updates
-
+        - episode_max_length: max length of training episode. It doesn't apply to evaluation episodes.
+        If environment max length is shorter it will dominate over episode_max_length. If you set episode_max_length
+        to be equal to enviroment._max_episode_steps - 2 it can be used as partial-bootstrapping of termination state
+        (https://arxiv.org/abs/1712.00378).
         """
         # training parameters
+        self.episode_max_length = episode_max_length
         self.batch_size = batch_size
         self.gamma = gamma
         self.replay_start_size = replay_start_size
@@ -108,9 +111,39 @@ class DQNAgent:
         # Feature state is stored as first element.
         self._state = RingBuf(n_state_frames + 1)
 
+        # constants
+        self.EPISODE_UNLIMITED = -1
+
     def train(self, n_frames=1000000, plot=True, iteration=1, visual_evaluation_period=100, evaluate_on=10,
               evaluation_period=10, save_model_period=10, render=False):
-        """CAUTHION: render option may take a lot of computing power thus significantly extending training time."""
+        """
+        Trains agent.
+
+        Params:
+        - n_frames: number of transitions on with agent is trained on.
+        - plot: bool telling whether graphs should be displayed. There are implemented graphs for:
+            * average score in training episodes(games) agent is trained on per batch
+            * average evaluation score per batch
+            * first state and average Q-Value of best action per episode(game)
+            * Average Q-Value error after batch update per batch. Error is calculated on transitions
+            sampled for current batch.
+        - iteration number to starts on. Some utilities use this value to determine whatever to call
+        function after training episode. Leave untouched if you don't need to change it and know what
+        are you doing
+        - visual_evaluation_period: number of epochs after with run game for visual evaluation.
+        Agent isn't trained on this episode and gained score isn't added to average evaluation
+        score plot is used. This is purely for visual evaluation.
+        - evaluate_on: number of games on with agent is evaluated on. Score gained in this evaluations
+        is used to plot graph.
+        - evaluation_period: period in number of episodes after with model is evaluated. Score gained
+        in this evaluations is used to plot graph. This determines density of points in average
+        evaluation score plot
+        - save_model_period: period in number of episodes after with online model is saved.
+        - render: boolean, whatever to render games on with agent is trained. CAUTHION: render option
+        may take a lot of computing power, thus significantly extending training time, but it's
+        environment dependent.
+
+        """
         print('Training Started')
         self.iteration = iteration
         self.n_actions_taken = 0
@@ -194,13 +227,13 @@ class DQNAgent:
         game_length = 0
         Q_values = []
 
-        while not terminate:
+        # we are counting game length from 0 thus +1
+        while not terminate and not self._game_length_exceeded(game_length + 1):
             action = self.choose_action()
             self.n_actions_taken += 1
-            # with tf.device('/cpu:0'):
             Q_values.append(np.max(self._get_current_state_prediction()))
 
-            while not terminate:
+            while not terminate and not self._game_length_exceeded(game_length + 1):
                 reward, terminate = self.env_step(action, render)
                 game_score += reward
                 action_mask = self.encode_action(action)
@@ -215,6 +248,11 @@ class DQNAgent:
                 self._update_agent()
 
         return game_score, Q_values
+
+    def _game_length_exceeded(self, game_length):
+        """Checks if internal max game length is not exceeded. If episode_max_length is
+        equal to -1 game length is unlimited."""
+        return self.episode_max_length != self.EPISODE_UNLIMITED and game_length > self.episode_max_length
 
     def reset_environment(self):
         """Reset gym environment and state field."""
@@ -243,7 +281,6 @@ class DQNAgent:
 
     def choose_best_action(self) -> int:
         """Choose best action according to current policy."""
-        # with tf.device('/cpu:0'):
         prediction = self._get_current_state_prediction()
         return int(np.argmax(prediction))
 
@@ -302,7 +339,6 @@ class DQNAgent:
     def _update_agent(self):
         """Makes model fit on one minibatch and update errors of prioritized experience memory."""
         start_states, actions, rewards, next_states, is_terminal = self.sample_batch_from_memory()
-        # with tf.device('/gpu:0'):
         errors = self.fit_batch(start_states, actions, rewards, next_states, is_terminal)
         self.error_plotter.add_data(np.average(errors))
         self.trained_on_n_frames += self.batch_size
@@ -323,16 +359,25 @@ class DQNAgent:
 
         Returns Q value errors
         """
+        target_Q_values = self._get_target_Q_values(next_states, actions, rewards, is_terminal)
+        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
+        # the targets by the actions.
+        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
+
+        return self._get_Q_values_errors(start_states, actions, target_Q_values)
+
+    def _get_target_Q_values(self, next_states, actions, rewards, is_terminal):
+        """Predicts target Q-Values"""
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         next_Q_values = self.online_model.predict_on_batch([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is reward by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
         target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
-        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
+        return target_Q_values
 
+    def _get_Q_values_errors(self, start_states, actions, target_Q_values):
+        """Calculate difference error between target Q-Values and current policy Q-Values"""
         actions = np.array(actions, dtype=bool)
         new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
         return target_Q_values - new_Q_values
@@ -340,22 +385,6 @@ class DQNAgent:
     def get_stats(self):
         return f'iteration: {self.iteration}, number of actions taken: {self.n_actions_taken}, ' \
                f'epsilon: {self.get_epsilon()}, trained on n frames: {self.trained_on_n_frames}'
-
-    def plot(self):
-        if self.fig is None:
-            self.fig, self.ax = plt.subplots(1, 1)
-            plt.show(block=False)
-            plt.draw()
-            plt.title(f'Average games reward per {self.n_games_between_update} games')
-            plt.xlabel(f'Iteration ({self.n_games_between_update} games, one update)')
-            plt.ylabel('Average reward')
-
-            self.points = plt.plot(np.arange(1, len(self.games_scores) + 1, 1), self.games_scores)
-
-        self.points[0].set_data(np.arange(1, len(self.games_scores) + 1, 1), self.games_scores)
-        self.ax.set_xlim(1, len(self.games_scores) + 1)
-        self.ax.set_ylim(min(self.games_scores), max(self.games_scores))
-        self.fig.canvas.draw()
 
     def save_model(self):
         self.online_model.save('model')
@@ -398,8 +427,6 @@ class FullDQNAgent(DQNAgent):
         self.n_model_updates = 0
         self.transitions_seen_between_updates = transitions_seen_between_updates
 
-        self.debug_plot = LinePlotter(data=[], title='Returned model loss', x_title='Batch number')
-
     def update_target_model_weights(self):
         self.target_model.set_weights(self.online_model.get_weights())
 
@@ -413,68 +440,31 @@ class FullDQNAgent(DQNAgent):
             self.update_target_model_weights()
             self.n_model_updates += 1
 
-    def fit_batch(self, start_states, actions, rewards, next_states, is_terminal):
-        """Updates model.
-
-        Params:
-        - start_states: numpy array of starting states
-        - actions: numpy array of one-hot encoded actions corresponding to the start states
-        - rewards: numpy array of rewards corresponding to the start states and actions
-        - next_states: numpy array of the resulting states corresponding to the start states and actions
-        - is_terminal: numpy boolean array of whether the resulting state is terminal
-
-        Returns Q value errors
-        """
+    def _get_target_Q_values(self, next_states, actions, rewards, is_terminal):
+        """Predicts target Q-Values"""
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+        # We are using target model to prevent chasing its own tail as target move after model update
         next_Q_values = self.target_model.predict_on_batch([next_states, np.ones(actions.shape)])
         # The Q values of the terminal states is reward by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
         target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
-        model_loss = self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
-        self.debug_plot.add_data(model_loss)
-
-        actions = np.array(actions, dtype=bool)
-        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
-        return target_Q_values - new_Q_values
-
-    def _plot(self):
-        super()._plot()
-        self.debug_plot.plot()
+        return target_Q_values
 
 
 class DoubleDQNAgent(FullDQNAgent):
-    def fit_batch(self, start_states, actions, rewards, next_states, is_terminal):
-        """Updates model.
-
-        Params:
-        - start_states: numpy array of starting states
-        - actions: numpy array of one-hot encoded actions corresponding to the start states
-        - rewards: numpy array of rewards corresponding to the start states and actions
-        - next_states: numpy array of the resulting states corresponding to the start states and actions
-        - is_terminal: numpy boolean array of whether the resulting state is terminal
-
-        Returns Q value errors
-        """
+    def _get_target_Q_values(self, next_states, actions, rewards, is_terminal):
+        """Predicts target Q-Values"""
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+        # We are using target model to prevent chasing its own tail as target move after model update
         next_Q_values = self.target_model.predict_on_batch([next_states, np.ones(actions.shape)])
-        # Take with action would be taken from online model.
-        next_Q_actions = self.online_model.predict_on_batch([next_states, np.ones(actions.shape)])
-        next_Q_actions = np.argmax(next_Q_actions, axis=-1)
-
+        next_Q_action = np.argmax(self.target_model.predict_on_batch([next_states, np.ones(actions.shape)]), axis=1)
         # The Q values of the terminal states is reward by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
-        target_Q_values = rewards + self.gamma * next_Q_values[:, next_Q_actions][:, 0]
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
-        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
-
-        actions = np.array(actions, dtype=bool)
-        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
-        return target_Q_values - new_Q_values
+        # To prevent overoptimism of agent we select best action using current policy
+        target_Q_values = rewards + self.gamma * next_Q_values[:, next_Q_action][:, 0]
+        return target_Q_values
 
 
 class PrioritizedDQNAgent(DQNAgent):
@@ -518,114 +508,40 @@ class PrioritizedDQNAgent(DQNAgent):
 
         Returns Q value errors
         """
-        # First, predict the Q values of the next states. Note how we are passing ones as the mask.
-        next_Q_values = self.online_model.predict_on_batch([next_states, np.ones(actions.shape)])
-        # The Q values of the terminal states is reward by definition, so override them
-        next_Q_values[is_terminal] = 0
-        # The Q values of each start state is the reward + gamma * the max next state Q value
-        target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
+        target_Q_values = self._get_target_Q_values(next_states, actions, rewards, is_terminal)
         # Because we sample from memory transitions with probability proportional to error
         # we need to compensate bias of this transitions, like in the case of classifying
         # unbalanced classes in dataset
-        samples_weights = np.power(1/len(self.memory) / probabilities,  0.4)
+        samples_weights = np.power(1 / len(self.memory) / probabilities, 0.7)
         # plotting weight for debug purposes
         self.plot_samples_weights.add_data(np.average(samples_weights))
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
-        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None],
-                                         sample_weight=samples_weights)
+        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
 
-        actions = np.array(actions, dtype=bool)
-        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
-        return target_Q_values - new_Q_values
+        return self._get_Q_values_errors(start_states, actions, target_Q_values)
 
     def _plot(self):
         super(PrioritizedDQNAgent, self)._plot()
         self.plot_samples_weights.plot()
 
-
-class AIODQNAgent(DQNAgent):
-    def __init__(self, alfa=1, transitions_seen_between_updates=10000, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        replay_size = kwargs.get('replay_size')
-        self.memory = PrioritizedExperienceReplay(replay_size, self.n_state_frames)
-        self.alfa = alfa
-        self.plot_samples_weights = LinePlotter([], title='Sample weights', x_title='batch number')
-
-        self.target_model = clone_model(self.online_model)
-        self.n_model_updates = 0
-        self.transitions_seen_between_updates = transitions_seen_between_updates
-
-    def _update_agent(self):
-        """Makes model fit on one minibatch and update errors of prioritized experience memory."""
-        start_states, actions, rewards, next_states, is_terminal, indexes, probabilities = self.sample_batch_from_memory()
-        errors = self.fit_batch(start_states, actions, rewards, next_states, is_terminal, probabilities)
-        self.error_plotter.add_data(np.average(errors))
-        self.trained_on_n_frames += self.batch_size
-
-        errors = self.get_memory_error(errors)
-        self.memory.update_errors(indexes, errors)
-
-    def get_memory_error(self, model_errors):
-        return np.power(np.abs(model_errors), self.alfa)
-
-    def sample_memory(self):
-        start_states, actions, rewards, next_states, is_terminal, indexes, probabilities = self.memory.sample_batch(self.batch_size)
-        return start_states, actions, rewards, next_states, is_terminal, indexes
-
-    def update_memory(self, action_mask, reward, terminate):
-        """Add transition to agent memory"""
-        self.memory.add(self.current_state, action_mask, self.feature_state, reward, terminate, 100)
-
-    def fit_batch(self, start_states, actions, rewards, next_states, is_terminal, probabilities):
-        """Updates model.
-
-        Params:
-        - start_states: numpy array of starting states
-        - actions: numpy array of one-hot encoded actions corresponding to the start states
-        - rewards: numpy array of rewards corresponding to the start states and actions
-        - next_states: numpy array of the resulting states corresponding to the start states and actions
-        - is_terminal: numpy boolean array of whether the resulting state is terminal
-
-        Returns Q value errors
-        """
+    def _get_target_Q_values(self, next_states, actions, rewards, is_terminal):
+        """Predicts target Q-Values"""
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+        # We are using target model to prevent chasing its own tail as target move after model update
         next_Q_values = self.target_model.predict_on_batch([next_states, np.ones(actions.shape)])
+        next_Q_action = np.argmax(self.target_model.predict_on_batch([next_states, np.ones(actions.shape)]), axis=1)
         # The Q values of the terminal states is reward by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
-        target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
-        # Because we sample from memory transitions with probability proportional to error
-        # we need to compensate bias of this transitions, like in the case of classifying
-        # unbalanced classes in dataset
-        samples_weights = np.power(1/len(self.memory) / probabilities,  0.4)
-        # plotting weight for debug purposes
-        self.plot_samples_weights.add_data(np.average(samples_weights))
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
-        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None],
-                                         sample_weight=samples_weights)
+        # To prevent overoptimism of agent we select best action using current policy
+        target_Q_values = rewards + self.gamma * next_Q_values[:, next_Q_action][:, 0]
+        return target_Q_values
 
-        actions = np.array(actions, dtype=bool)
-        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
-        return target_Q_values - new_Q_values
 
-    def _plot(self):
-        super(AIODQNAgent, self)._plot()
-        self.plot_samples_weights.plot()
+class AIODQNAgent(PrioritizedDQNAgent, DoubleDQNAgent):
+    pass
 
-    def update_target_model_weights(self):
-        self.target_model.set_weights(self.online_model.get_weights())
-
-    def train_utilities(self, evaluate_on, evaluation_period, plot, plotter, save_model_period,
-                        visual_evaluation_period):
-        """Run training utilities. Periodically update target model weights."""
-        super().train_utilities(evaluate_on, evaluation_period, plot, plotter, save_model_period,
-                        visual_evaluation_period)
-        # we want to update target_model weight after transitions_seen_between_updates transitions was seen
-        if (self.n_model_updates + 1) * self.transitions_seen_between_updates < self.trained_on_n_frames:
-            self.update_target_model_weights()
-            self.n_model_updates += 1
 
 if __name__ == "__main__":
     pass

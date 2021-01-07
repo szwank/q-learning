@@ -1,7 +1,7 @@
 from tensorflow.keras import layers, models, optimizers
 from tensorflow.python.keras.losses import huber
 
-from loss import huber_loss
+from losses import huber
 
 
 def get_expanded_model(input_size, n_actions, lr):
@@ -62,6 +62,8 @@ def get_dense_model(input_size, n_actions, lr):
     actions_input = layers.Input(n_actions)
 
     x = layers.Flatten()(state_input)
+    x = layers.Dense(256, activation="relu")(x)
+    x = layers.Dense(128, activation="relu")(x)
     x = layers.Dense(64, activation="relu")(x)
     # x = layers.Dense(64, activation="relu", kernel_initializer='he_uniform')(x)
     x = layers.Dense(n_actions, activation='linear')(x)
