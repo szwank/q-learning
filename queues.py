@@ -305,7 +305,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
 
     @property
     def get_min_probability(self):
-        return self.errors.root.epsilon / self.errors.error_sum
+        return self.errors.min_value / self.errors.error_sum
 
     def add(self, state: List[np.array], action: np.array, new_frame: np.array, reward: int,
             terminate: bool, error: float):
