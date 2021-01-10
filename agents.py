@@ -474,6 +474,8 @@ class PrioritizedDQNAgent(DQNAgent):
         self.memory = PrioritizedExperienceReplay(replay_size, self.n_state_frames)
         self.alfa = alfa
         self.plot_samples_weights = LinePlotter([], title='Sample weights', x_title='batch number')
+        self.plot_min_probability = LinePlotter([], title='Min probability', x_title='batch number')
+        self.plot_error_sum = LinePlotter([], title='Memory error sum', x_title='batch number')
 
     def _update_agent(self):
         """Makes model fit on one minibatch and update errors of prioritized experience memory."""
@@ -525,9 +527,11 @@ class PrioritizedDQNAgent(DQNAgent):
         self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None],
                                          sample_weight=samples_weights)
 
-        actions = np.array(actions, dtype=bool)
-        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
-        return target_Q_values - new_Q_values
+        self.plot_samples_weights.add_data(np.average(probabilities))
+        # self.plot_min_probability.add_data(min_prob)
+        self.plot_error_sum.add_data(self.memory.errors.error_sum)
+
+        return self._get_Q_values_errors(start_states, actions, target_Q_values)
 
     def _plot(self):
         super(PrioritizedDQNAgent, self)._plot()
