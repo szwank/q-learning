@@ -240,6 +240,14 @@ class PrioritizedRingBuf(RingBuf):
     def error_sum(self):
         return self.root._value
 
+    @property
+    def min_value(self):
+        minimum = self.data[0].value
+        for element in self.data[1:]:
+            if 0 < element.value < minimum:
+                minimum = element.value
+        return minimum
+
     def append(self, element):
         self.data[self.end].update_value(element)
         self.end = (self.end + 1) % len(self.data)
