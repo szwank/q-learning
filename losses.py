@@ -33,7 +33,7 @@ def huber(y_true, y_pred):
         K.mean(
             tf.where(
                 quadratic >= abs_error,
-                quadratic,
-                abs_error
+                abs_error,
+                quadratic
             )
         )
