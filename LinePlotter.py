@@ -1,3 +1,4 @@
+import math
 from typing import List
 
 import matplotlib
@@ -37,10 +38,22 @@ class LinePlotter:
         self.points = self.ax.plot(np.arange(1, len(self.data) + 1, 1), self.data)[0]
 
     def _update_figure(self):
-        self.points.set_data(np.arange(1, len(self.data) + 1, 1), self.data)
-        self.ax.set_xlim(0, len(self.data) + 1)
-        self.ax.set_ylim(self.y_min, self.y_max)
+        data_len = len(self.data)
+        self.points.set_data(np.arange(1, data_len + 1, 1), self.data)
+        self.ax.set_xlim(0, self.get_max_xlim())
+        self.ax.set_ylim(self.get_min_y_lim(), self.y_max)
         self.fig.canvas.draw()
+
+    def get_max_xlim(self):
+        return math.ceil(len(self.data) * 1.1)
+
+    def get_min_y_lim(self):
+        """Returns min border value of y axis on plot. This value is smaller than self.y_min."""
+        return math.ceil(self.y_min - abs(self.y_min)*0.1)
+
+    def get_max_y_lim(self):
+        """Returns max border value of y axis on plot. This value is greater than self.y_max."""
+        return math.ceil(self.y_max + abs(self.y_max)*0.1)
 
     def add_data(self, new_data: List[int or float] or int or float):
         """Update data with passed data and update y min and max."""
