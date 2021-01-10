@@ -453,32 +453,18 @@ class FullDQNAgent(DQNAgent):
 
 
 class DoubleDQNAgent(FullDQNAgent):
-    def fit_batch(self, start_states, actions, rewards, next_states, is_terminal):
-        """Updates model.
-
-        Params:
-        - start_states: numpy array of starting states
-        - actions: numpy array of one-hot encoded actions corresponding to the start states
-        - rewards: numpy array of rewards corresponding to the start states and actions
-        - next_states: numpy array of the resulting states corresponding to the start states and actions
-        - is_terminal: numpy boolean array of whether the resulting state is terminal
-
-        Returns Q value errors
-        """
+    def _get_target_Q_values(self, next_states, actions, rewards, is_terminal):
+        """Predicts target Q-Values"""
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+        # We are using target model to prevent chasing its own tail as target move after model update
         next_Q_values = self.target_model.predict_on_batch([next_states, np.ones(actions.shape)])
         next_Q_action = np.argmax(self.target_model.predict_on_batch([next_states, np.ones(actions.shape)]), axis=1)
         # The Q values of the terminal states is reward by definition, so override them
         next_Q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q value
+        # To prevent overoptimism of agent we select best action using current policy
         target_Q_values = rewards + self.gamma * next_Q_values[:, next_Q_action][:, 0]
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
-        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
-
-        actions = np.array(actions, dtype=bool)
-        new_Q_values = self.online_model.predict_on_batch([start_states, np.ones(actions.shape)])[actions]
-        return target_Q_values - new_Q_values
+        return target_Q_values
 
 
 class PrioritizedDQNAgent(DQNAgent):
