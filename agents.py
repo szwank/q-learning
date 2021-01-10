@@ -19,28 +19,27 @@ from queues import RingBuf, ExperienceReplay, PrioritizedExperienceReplay
 class DQNAgent:
     def __init__(self, model, environment, preprocess_funcs=[], replay_size=1000000,
                  n_state_frames=4, batch_size=32, gamma=0.99, replay_start_size=50000,
-                 final_exploration_frame=1000000, min_eps=0.1, max_eps=1, update_between_n_episodes=4,
+                 final_exploration_frame=1000000, min_eps=0.1, max_eps=1,
                  alfa=2, initial_memory_error=10, skipp_n_states=4, actions_between_update=4, episode_max_length=-1):
         """
         Params:
-        - model: agent NN model. Model should have two inputs: first one for states (its size
-        depend on preprocess_funcs and its order and value of n_state_frames argument) should be for action
+        - model: agent NN model. Model should have two inputs: first one for states (it's size depend original
+        size of state and passed preprocess_funcs and value of n_state_frames argument) second one is for action
         mask(binary vector multiplied by output, used for training). First dimension of first input should
-        be equal to n_state_frames. Output of network should be equal to number of possible actions in
-        passed environment
-        - env_name: name of gym environment(https://github.com/openai/gym/wiki/Table-of-environments) on
-        with agent will be trained
-        - preprocess_funcs: list of functions used to preprocess state of environment
+        be equal to n_state_frames, left dimensions should be equal to state dimension after preprocessing.
+        Output of network should be equal to number of possible actions in passed environment
+        - environment: gym environment on with agent will be trained. Possible environments can be found on
+        https://github.com/openai/gym/wiki/Table-of-environments
+        - preprocess_funcs: list of functions used to preprocess each state of environment
         - replay_size: size of experience replay buffer
         - n_state_frames: number of states passed at once to network for one forward propagation
-        - batch_size: number of states-actions-rewards passed on network train epoch (minibatch size)
+        - batch_size: number of states-actions-rewards passed on network train epoch (minibatch period)
         - gamma: gamma parameter in Q-Value equation: QValue[s] = reward + gamma * max(QValue[s+1])
-        - replay_start_size: initial size to with experience replay will be filled with random actions
+        - replay_start_size: initial period to with experience replay will be filled with random actions
          before training
-        - final_exploration_frame: last frame number before epsilon will be equal to min_eps
+        - final_exploration_frame: frame for with epsilon will be equal to min_eps
         - min_eps: minimum epsilon value
         - max_eps: start value of epsilon
-        - update_between_n_episodes: number of played games after with network will be updated on minibatch
         - alfa: parameter used to tell how much more we care about transitions with big errors. When set to 0
         transitions will be sampled uniformly
         - initial_memory_error: value set to prioritized experience replay as initial error value.
@@ -51,7 +50,7 @@ class DQNAgent:
         - episode_max_length: max length of training episode. It doesn't apply to evaluation episodes.
         If environment max length is shorter it will dominate over episode_max_length. If you set episode_max_length
         to be equal to enviroment._max_episode_steps - 2 it can be used as partial-bootstrapping of termination state
-        (https://arxiv.org/abs/1712.00378).
+        (https://arxiv.org/abs/1712.00378). Setting it to -1 turn off this feature.
         """
         # training parameters
         self.episode_max_length = episode_max_length
@@ -60,7 +59,6 @@ class DQNAgent:
         self.replay_start_size = replay_start_size
         self.final_exploration_frame = final_exploration_frame
         self.n_state_frames = n_state_frames
-        self.n_games_between_update = update_between_n_episodes
         self.alfa = alfa
         self.initial_memory_error = initial_memory_error
         self.min_eps = min_eps
