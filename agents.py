@@ -388,7 +388,10 @@ class DQNAgent:
 
         terminate = False
         while not terminate:
-            action = self.choose_best_action()
+            if random.random() < 0.05:
+                action = self.env.action_space.sample()
+            else:
+                action = self.choose_best_action()
             self.env.render()
             sleep(0.05)
             reward, terminate = self.env_step(action)
@@ -405,7 +408,10 @@ class DQNAgent:
             game_length = 0
 
             while not terminate:
-                action = self.choose_best_action()
+                if random.random() < 0.05:
+                    action = self.env.action_space.sample()
+                else:
+                    action = self.choose_best_action()
                 reward, terminate = self.env_step(action)
                 game_score += reward
                 game_length += 1
