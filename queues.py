@@ -251,10 +251,10 @@ class PrioritizedRingBuf(RingBuf):
     def append(self, element):
         self.data[self.end].update_value(element)
         self.end = (self.end + 1) % len(self.data)
-        self.data[self.end].update_value(None)
         # end == start and yet we just added one element. This means the buffer has one
         # too many element. Remove the first element by incrementing start.
         if self.end == self.start:
+            self.data[self.end].update_value(None)
             self.start = (self.start + 1) % len(self.data)
 
     def to_list(self):
