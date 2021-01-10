@@ -537,23 +537,3 @@ class PrioritizedDQNAgent(DQNAgent):
 
 class AIODQNAgent(PrioritizedDQNAgent, DoubleDQNAgent):
     pass
-
-
-if __name__ == "__main__":
-    pass
-    # model = load_model('model')
-    # learner = DQNAgent(model=model,
-    #                    env_name='CartPole-v1',
-    #                    replay_size=25000,
-    #                    replay_start_size=10000,
-    #                    final_exploration_frame=400000,
-    #                    batch_size=32,
-    #                    n_state_frames=1,
-    #                    gamma=0.99,
-    #                    initial_memory_error=1,
-    #                    update_between_n_episodes=1
-    #                    )
-    # # print(np.mean(learner.evaluate(100)))
-    # learner.visual_evaluate()
-
-
