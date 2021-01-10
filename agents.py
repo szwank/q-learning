@@ -1,9 +1,3 @@
-import os
-
-# Training it's faster with cpu. That's caused by nature of solved problem,
-# we have to make many prediction with only one sample in batch.
-os.environ["CUDA_VISIBLE_DEVICES"]="-1"
-
 import random
 import gc
 from time import sleep
