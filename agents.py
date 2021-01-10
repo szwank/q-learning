@@ -468,11 +468,12 @@ class DoubleDQNAgent(FullDQNAgent):
 
 
 class PrioritizedDQNAgent(DQNAgent):
-    def __init__(self, alfa=1, *args, **kwargs):
+    def __init__(self, alfa=0.7, beta=0.5, *args, **kwargs):
         super().__init__(*args, **kwargs)
         replay_size = kwargs.get('replay_size')
         self.memory = PrioritizedExperienceReplay(replay_size, self.n_state_frames)
         self.alfa = alfa
+        self.beta = beta
         self.plot_samples_weights = LinePlotter([], title='Sample weights', x_title='batch number')
         self.plot_min_probability = LinePlotter([], title='Min probability', x_title='batch number')
         self.plot_error_sum = LinePlotter([], title='Memory error sum', x_title='batch number')
@@ -510,22 +511,16 @@ class PrioritizedDQNAgent(DQNAgent):
 
         Returns Q value errors
         """
-        # First, predict the Q values of the next states. Note how we are passing ones as the mask.
-        next_Q_values = self.online_model.predict_on_batch([next_states, np.ones(actions.shape)])
-        # The Q values of the terminal states is reward by definition, so override them
-        next_Q_values[is_terminal] = 0
-        # The Q values of each start state is the reward + gamma * the max next state Q value
-        target_Q_values = rewards + self.gamma * np.max(next_Q_values, axis=1)
+        target_Q_values = self._get_target_Q_values(next_states, actions, rewards, is_terminal)
         # Because we sample from memory transitions with probability proportional to error
         # we need to compensate bias of this transitions, like in the case of classifying
         # unbalanced classes in dataset
-        samples_weights = np.power(1/len(self.memory) / probabilities,  0.4)
+        min_prob = self.memory.get_min_probability
+        samples_weights = np.power(min_prob / probabilities, self.beta)
         # plotting weight for debug purposes
-        self.plot_samples_weights.add_data(np.average(samples_weights))
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
-        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None],
-                                         sample_weight=samples_weights)
+        self.online_model.train_on_batch([start_states, actions], actions * target_Q_values[:, None])
 
         self.plot_samples_weights.add_data(np.average(probabilities))
         # self.plot_min_probability.add_data(min_prob)
