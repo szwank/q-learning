@@ -244,7 +244,7 @@ class DQNAgent:
     def _game_length_exceeded(self, game_length):
         """Checks if internal max game length is not exceeded. If episode_max_length is
         equal to -1 game length is unlimited."""
-        return self.episode_max_length != self.EPISODE_UNLIMITED and game_length <= self.episode_max_length
+        return self.episode_max_length != self.EPISODE_UNLIMITED and game_length > self.episode_max_length
 
     def reset_environment(self):
         """Reset gym environment and state field."""
